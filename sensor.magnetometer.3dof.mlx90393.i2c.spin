@@ -82,7 +82,7 @@ PUB LastTemp{}
 '   Returns: Raw temperature word, s16
     return ~~_last_temp
 
-PUB MagAxisEnabled(xyz_mask): curr_mask
+PUB MagAxisEnabled(xyz_mask): curr_mask 'TODO
 ' Enable magnetometer axis per bitmask
 '   Valid values:
 '       Bits %210 (xyz):
