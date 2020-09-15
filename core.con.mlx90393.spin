@@ -17,7 +17,7 @@ CON
     TPOR                = 2_000     ' uSec
 
 ' Commands
-    NOOP                = $ff00     ' Actually $00, but $ff00 is used to distinguish it from RAM
+    NOOP                = $00
     START_BURST_MODE    = $10
     START_WAKE_ON_CHANGE= $20
     START_SINGLE_MEAS   = $30

@@ -104,8 +104,7 @@ PUB MagData(ptr_x, ptr_y, ptr_z) | tmp[2]
 ' Read magnetometer data
 '   NOTE: For efficiency, the temperature data is read in as well,
 '       and stored in a hub variable
-    readreg(core#READ_MEAS | core#ALL, 8, @tmp)
-
+    command(core#READ_MEAS, core#ALL, 8, @tmp)
     longfill(ptr_x, 0, 3)
 
     long[ptr_x] := ~~tmp.word[X_AXIS]
@@ -130,21 +129,22 @@ PUB MeasureMag{}: status
 ' Perform a measurement
 '   NOTE: This method only applies to single-shot measurement mode
 '       and will stop continuous measurement mode, if called
-    status := writereg(core#START_SINGLE_MEAS | core#ALL, 0, 0)
+    status := command(core#START_SINGLE_MEAS, core#ALL, 0, 0)
 
 PUB Reset{}: status
 ' Reset the device
 '   NOTE: A mandatory 2ms delay is waited after resetting
     exit{}
-    writereg(core#RESET, 0, 0)
+    command(core#RESET, 0, 0, 0)
     time.usleep(core#TPOR)
 
 PUB TempData{}: temp_raw
 ' Read temperature data
 '   Returns: Raw temperature word, s16
-    writereg(core#START_SINGLE_MEAS | core#T, 0, 0)
-    readreg(core#READ_MEAS | core#T, 2, @temp_raw)
-    _last_temp := ~~temp_raw
+    command(core#START_SINGLE_MEAS, core#T, 0, 0)
+    command(core#READ_MEAS, core#T, 2, @temp_raw)
+    ~~temp_raw
+    _last_temp := temp_raw
 
 PUB Temperature{}: temp
 ' TODO
@@ -154,15 +154,15 @@ PUB TempScale(scale): curr_scl
 
 PRI exit{}: status
 ' Exit mode
-    status := writereg(core#EXIT_MODE, 0, 0)
+    status := command(core#EXIT_MODE, 0, 0, 0)
 
-PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
-' Read nr_bytes from device
+PRI command(cmd, arg, nr_rdbytes, ptr_buff): status | cmd_pkt, tmp
+' Send command with arg to device
     status := 0
-    case reg_nr & $f0
+    case cmd
         core#READ_MEAS:
             cmd_pkt.byte[0] := SLAVE_WR
-            cmd_pkt.byte[1] := reg_nr
+            cmd_pkt.byte[1] := cmd | arg
 
             i2c.start
             repeat tmp from 0 to 1
@@ -173,23 +173,16 @@ PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
             status := i2c.read(i2c#ACK)
 
 ' How many bytes are ready to read? Make sure it matches what's requested:
-            if nr_bytes == (2 * (status & core#D_BITS) + 2)
-                repeat tmp from nr_bytes-1 to 0
+            if nr_rdbytes == (2 * (status & core#D_BITS) + 2)
+                repeat tmp from nr_rdbytes-1 to 0
                     byte[ptr_buff][tmp] := i2c.read(tmp == 0)
                 i2c.stop
             else
                 i2c.stop{}
                 return false
-
-        other:
-            return
-
-PRI writeReg(reg_nr, nr_bytes, ptr_buff): status | tmp, cmd_pkt
-' Write nr_bytes to device
-    case reg_nr & $f0
         core#START_SINGLE_MEAS, core#EXIT_MODE:
             cmd_pkt.byte[0] := SLAVE_WR
-            cmd_pkt.byte[1] := reg_nr
+            cmd_pkt.byte[1] := cmd | arg
 
             i2c.start
             repeat tmp from 0 to 1
@@ -202,14 +195,58 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff): status | tmp, cmd_pkt
             time.msleep(2)                          ' wait for measurement
         core#RESET:
             cmd_pkt.byte[0] := SLAVE_WR
-            cmd_pkt.byte[1] := reg_nr
+            cmd_pkt.byte[1] := cmd
 
             i2c.start
             repeat tmp from 0 to 1
                 i2c.write(cmd_pkt.byte[tmp])
             i2c.stop{}
         other:
-            return false
+            return
+
+PUB readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
+' Read nr_bytes from device
+    status := 0
+    case reg_nr
+        $00..$3c:
+            cmd_pkt.byte[0] := SLAVE_WR
+            cmd_pkt.byte[1] := core#READ_REG        ' RR command
+            cmd_pkt.byte[2] := reg_nr << 2
+
+            i2c.start
+            repeat tmp from 0 to 2
+                i2c.write(cmd_pkt.byte[tmp])
+
+            i2c.start
+            i2c.write(SLAVE_RD)
+            status := i2c.read(i2c#ACK)
+            repeat tmp from 1 to 0
+                byte[ptr_buff][tmp] := i2c.read(tmp == 0)
+            i2c.stop
+        other:
+            return
+
+PRI writeReg(reg_nr, nr_bytes, ptr_buff): status | tmp, cmd_pkt
+' Write nr_bytes to device
+    case reg_nr
+        $00..$09:
+            cmd_pkt.byte[0] := SLAVE_WR
+            cmd_pkt.byte[1] := core#WRITE_REG       ' WR command
+            cmd_pkt.byte[2] := byte[ptr_buff][1]    ' data first (yes)
+            cmd_pkt.byte[3] := byte[ptr_buff][0]
+            cmd_pkt.byte[4] := reg_nr << 2
+
+            i2c.start
+            repeat tmp from 0 to 4
+                i2c.write(cmd_pkt.byte[tmp])
+
+            i2c.start
+            i2c.write(SLAVE_RD)
+            status := i2c.read(i2c#NAK)
+            i2c.stop
+            return
+        other:
+            return
 
 DAT
 {
