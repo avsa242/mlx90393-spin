@@ -5,7 +5,7 @@
     Description: Low-level constants
     Copyright (c) 2020
     Started Aug 27, 2020
-    Updated Sep 13, 2020
+    Updated Sep 16, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -63,28 +63,44 @@ CON
 
     CFG1                = $01
     CFG1_MASK           = $FFFF
-        BURST_SEL1      = 14
-        BURST_DRATE     = 8
-        TRIG_INT        = 7
-        COMM_MODE       = 5
-        WOC_DIFF        = 4
-        EXT_TRG         = 3
-        TCMP_EN         = 2
-        BURST_SEL0      = 0
-        BURST_SEL1_BITS = %11
-        BURST_DRATE_BITS= %111111
+        TRIG_INT        = 15
+        COMM_MODE       = 13
+        WOC_DIFF        = 12
+        EXT_TRG         = 11
+        TCMP_EN         = 10
+        BURST_SEL       = 6
+        BURST_DRATE     = 0
         COMM_MODE_BITS  = %11
-        BURST_SEL0_BITS = %11
+        BURST_SEL_BITS  = %1111
+        BURST_DRATE_BITS= %111111
+        TRIG_INT_MASK   = (1 << TRIG_INT) ^ CFG1_MASK
+        COMM_MODE_MASK  = (COMM_MODE_BITS << COMM_MODE) ^ CFG1_MASK
+        WOC_DIFF_MASK   = (1 << WOC_DIFF) ^ CFG1_MASK
+        EXT_TRG_MASK    = (1 << EXT_TRG) ^ CFG1_MASK
+        TCMP_EN_MASK    = (1 << TCMP_EN) ^ CFG1_MASK
+        BURST_SEL_MASK  = (BURST_SEL_BITS << BURST_SEL) ^ CFG1_MASK
+        BURST_DRATE_MASK= (BURST_DRATE_BITS << BURST_DRATE) ^ CFG1_MASK
 
     CFG2                = $02
-    CFG2_MASK           = $FF1F
-        RES_Y1          = 15
-        RES_X           = 13
-        DIG_FILT        = 10
-        OSR             = 8
-        OSR2            = 3
-        RES_Z           = 1
-        RES_Y0          = 0
+    CFG2_MASK           = $1FFF
+        OSR2            = 11
+        RES_Z           = 9
+        RES_Y           = 7
+        RES_X           = 5
+        DIG_FILT        = 2
+        OSR             = 0
+        OSR2_BITS       = %11
+        RES_Z_BITS      = %11
+        RES_Y_BITS      = %11
+        RES_X_BITS      = %11
+        DIG_FILT_BITS   = %111
+        OSR_BITS        = %11
+        OSR2_MASK       = (OSR2_BITS << OSR2) ^ CFG2_MASK
+        RES_Z_MASK      = (RES_Z_BITS << RES_Z) ^ CFG2_MASK
+        RES_Y_MASK      = (RES_Y_BITS << RES_Y) ^ CFG2_MASK
+        RES_X_MASK      = (RES_X_BITS << RES_X) ^ CFG2_MASK
+        DIG_FILT_MASK   = (DIG_FILT_BITS << DIG_FILT) ^ CFG2_MASK
+        OSR_MASK        = (OSR_BITS << OSR) ^ CFG2_MASK
 
     SENS_TC             = $03   ' SENS_TC_LT:SENS_TC_HT
 
