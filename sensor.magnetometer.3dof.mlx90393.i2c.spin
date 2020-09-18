@@ -107,9 +107,9 @@ PUB MagData(ptr_x, ptr_y, ptr_z) | tmp[2]
     command(core#READ_MEAS, core#ALL, 8, @tmp)
     longfill(ptr_x, 0, 3)
 
-    long[ptr_x] := ~~tmp.word[X_AXIS]
-    long[ptr_y] := ~~tmp.word[Y_AXIS]
-    long[ptr_z] := ~~tmp.word[Z_AXIS]
+    long[ptr_x] := ~~tmp.word[2]
+    long[ptr_y] := ~~tmp.word[1]
+    long[ptr_z] := ~~tmp.word[0]
     _last_temp := tmp.word[3]                       ' Read in the temp, too
 
 PUB MagDataRate(Hz): curr_rate
