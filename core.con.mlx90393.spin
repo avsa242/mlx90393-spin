@@ -5,7 +5,7 @@
     Description: Low-level constants
     Copyright (c) 2020
     Started Aug 27, 2020
-    Updated Sep 16, 2020
+    Updated Nov 15, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -49,17 +49,17 @@ CON
 
 ' RAM registers
     CFG0                = $00
-    CFG0_MASK           = $FF01
-        ZSERIES         = 15
-        GAIN_SEL        = 12
-        HALLCONF        = 8
-        BIST            = 0
+    CFG0_MASK           = $01FF
+        BIST            = 8
+        ZSERIES         = 7
+        GAIN_SEL        = 4
+        HALLCONF        = 0
         GAIN_SEL_BITS   = %111
         HALLCONF_BITS   = %1111
+        BIST_MASK       = 1 ^ CFG0_MASK
         ZSERIES_MASK    = (1 << ZSERIES) ^ CFG0_MASK
         GAIN_SEL_MASK   = (GAIN_SEL_BITS << GAIN_SEL) ^ CFG0_MASK
         HALLCONF_MASK   = (HALLCONF_BITS << HALLCONF) ^ CFG0_MASK
-        BIST_MASK       = 1 ^ CFG0_MASK
 
     CFG1                = $01
     CFG1_MASK           = $FFFF
@@ -69,9 +69,12 @@ CON
         EXT_TRG         = 11
         TCMP_EN         = 10
         BURST_SEL       = 6
+        BURST_SEL_ZYX   = 7
+        BURST_SEL_T     = 6
         BURST_DRATE     = 0
         COMM_MODE_BITS  = %11
         BURST_SEL_BITS  = %1111
+        BURSTSEL_ZYXBITS= %111
         BURST_DRATE_BITS= %111111
         TRIG_INT_MASK   = (1 << TRIG_INT) ^ CFG1_MASK
         COMM_MODE_MASK  = (COMM_MODE_BITS << COMM_MODE) ^ CFG1_MASK
@@ -79,7 +82,8 @@ CON
         EXT_TRG_MASK    = (1 << EXT_TRG) ^ CFG1_MASK
         TCMP_EN_MASK    = (1 << TCMP_EN) ^ CFG1_MASK
         BURST_SEL_MASK  = (BURST_SEL_BITS << BURST_SEL) ^ CFG1_MASK
-        BURST_DRATE_MASK= (BURST_DRATE_BITS << BURST_DRATE) ^ CFG1_MASK
+        BURSTSEL_ZYXMASK= (BURSTSEL_ZYXBITS << BURST_SEL_ZYX) ^ CFG1_MASK
+        BURST_DRATE_MASK= BURST_DRATE_BITS ^ CFG1_MASK
 
     CFG2                = $02
     CFG2_MASK           = $1FFF

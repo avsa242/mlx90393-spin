@@ -5,7 +5,7 @@
     Description: Demo of the MLX90393 driver
     Copyright (c) 2020
     Started Aud 27, 2020
-    Updated Sep 13, 2020
+    Updated Nov 15, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -16,13 +16,12 @@ CON
 
 ' -- User-modifiable constants
     LED         = cfg#LED1
-    SER_RX      = 31
-    SER_TX      = 30
     SER_BAUD    = 115_200
 
     I2C_SCL     = 24
     I2C_SDA     = 25
-    I2C_HZ      = 400_000
+    I2C_HZ      = 400_000                       ' 400_000 max
+    INT_PIN     = 22                            ' required (data ready flag)
 ' --
 
     DAT_X_COL   = 20
@@ -34,20 +33,20 @@ OBJ
     cfg     : "core.con.boardcfg.flip"
     ser     : "com.serial.terminal.ansi"
     time    : "time"
-    io      : "io"
     int     : "string.integer"
     mag     : "sensor.magnetometer.3dof.mlx90393.i2c"
 
 VAR
 
     long _overruns
+    long _opmode
 
 PUB Main{} | dispmode
 
     setup{}
-    mag.magscale(16)                                        ' 14, 16 (bits)
-    mag.magbias(0, 0, 0, 1)
 
+    mag.magaxisenabled(%111)
+    mag.magopmode(mag#CONT)
     ser.hidecursor{}
     dispmode := 0
 
@@ -82,12 +81,13 @@ PUB Main{} | dispmode
                 tempcalc{}
 
     ser.showcursor{}
-    flashled(LED, 100)
+    repeat
 
 PUB MagCalc{} | mx, my, mz
 ' TODO
+    if _opmode == mag#SINGLE
+        mag.measuremag{}
     repeat until mag.magdataready{}
-    mag.measuremag{}
     mag.maggauss (@mx, @my, @mz)
     ser.str(string("Mag gauss:   "))
     ser.position(DAT_X_COL, 12)
@@ -101,8 +101,9 @@ PUB MagCalc{} | mx, my, mz
 
 PUB MagRaw{} | mx, my, mz
 
+    if _opmode == mag#SINGLE
+        mag.measuremag{}
     repeat until mag.magdataready{}
-    mag.measuremag{}
     mag.magdata (@mx, @my, @mz)
     ser.str(string("Mag raw:  "))
     ser.position(DAT_X_COL, 12)
@@ -138,20 +139,9 @@ PUB Calibrate{}
 
 PUB DisplaySettings{} | axo, ayo, azo, gxo, gyo, gzo, mxo, myo, mzo
 
+    _opmode := mag.magopmode(-2)                ' read back the current opmode
     ser.position(0, 3)
-    mag.magbias(@mxo, @myo, @mzo, 0)
-    ser.str(string("MagBias: "))
-    ser.dec(mxo)
-    ser.str(string("(x), "))
-    ser.dec(myo)
-    ser.str(string("(y), "))
-    ser.dec(mzo)
-    ser.str(string("(z)"))
-    ser.newline{}
-
-    ser.str(string("MagScale: "))
-    ser.dec(mag.magscale(-2))
-    ser.newline{}
+    ser.newline
 
 PRI Decimal(scaled, divisor) | whole[4], part[4], places, tmp
 ' Display a fixed-point scaled up number in decimal-dot notation - scale it back down by divisor
@@ -174,21 +164,17 @@ PRI Decimal(scaled, divisor) | whole[4], part[4], places, tmp
 
 PUB Setup{}
 
-    repeat until ser.startrxtx(SER_RX, SER_TX, 0, SER_BAUD)
+    ser.start(SER_BAUD)
     time.msleep(30)
     ser.clear{}
     ser.strln(string("Serial terminal started"))
-    if mag.startx(I2C_SCL, I2C_SDA, I2C_HZ, -1)
+    if mag.startx(I2C_SCL, I2C_SDA, I2C_HZ, INT_PIN)
         mag.defaults{}
         ser.strln(string("MLX90393 driver started (I2C)"))
     else
         ser.strln(string("MLX90393 driver failed to start - halting"))
         mag.stop{}
         time.msleep(5)
-        flashled(LED, 500)
-
-
-#include "lib.utility.spin"
 
 DAT
 {
