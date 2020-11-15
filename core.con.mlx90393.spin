@@ -40,10 +40,12 @@ CON
     BURST_MODE          = 7
     WOC_MODE            = 6
     SM_MODE             = 5
+    MODE                = 5
     ERROR               = 4
     SED                 = 3
     RS                  = 2
     D                   = 0
+    MODE_BITS           = %111
     D_BITS              = %11
 
 

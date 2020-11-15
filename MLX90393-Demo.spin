@@ -45,8 +45,10 @@ PUB Main{} | dispmode
 
     setup{}
 
-    mag.magaxisenabled(%111)
     mag.magopmode(mag#CONT)
+    mag.magaxisenabled(%111)
+    mag.magdatarate(50)
+
     ser.hidecursor{}
     dispmode := 0
 
@@ -137,10 +139,16 @@ PUB Calibrate{}
     ser.position (0, 21)
     ser.str(string("              "))
 
-PUB DisplaySettings{} | axo, ayo, azo, gxo, gyo, gzo, mxo, myo, mzo
+PUB DisplaySettings{} | mxo, myo, mzo
 
     _opmode := mag.magopmode(-2)                ' read back the current opmode
     ser.position(0, 3)
+    ser.str(string("MagOpMode: "))
+    ser.str(lookupz(_opmode: string("SINGLE"), 0, string("WOC"), 0, string("CONT")))
+    ser.newline
+
+    ser.str(string("MagDataRate: "))
+    ser.dec(mag.magdatarate(-2))
     ser.newline
 
 PRI Decimal(scaled, divisor) | whole[4], part[4], places, tmp

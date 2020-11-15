@@ -92,8 +92,8 @@ PUB MagAxisEnabled(xyz_mask): curr_mask 'TODO
 '           1: Enable axis
     curr_mask := _axes_enabled
     case xyz_mask & %111
-        %000..%111:                                 ' LSB is temp sensor
-            xyz_mask ><= 3                          ' rev; order in reg is %zyx
+        %000..%111:                             ' LSB is temp sensor
+            xyz_mask ><= 3                      ' rev; order in reg is %zyx
             _axes_enabled &= %0001
             _axes_enabled |= (xyz_mask << 1)
         other:
@@ -112,10 +112,31 @@ PUB MagData(ptr_x, ptr_y, ptr_z): status | tmp[2]
     long[ptr_x] := ~~tmp.word[2]
     long[ptr_y] := ~~tmp.word[1]
     long[ptr_z] := ~~tmp.word[0]
-    _last_temp := tmp.word[3]                       ' Read in the temp, too
+    _last_temp := tmp.word[3]                   ' Read in the temp, too
 
-PUB MagDataRate(Hz): curr_rate
-' TODO
+PUB MagDataRate(rate): curr_rate | opmode_orig
+' Set magnetometer data rate, in Hz
+'   Valid values: 0..50, *876
+'   Any other value polls the chip and returns the current setting
+'   NOTE: Values 0..50 are approximated
+    opmode_orig := magopmode(-2)                ' store user op. mode
+    magopmode(SINGLE)                           ' must be in idle to read regs
+    curr_rate := 0
+    readreg(core#CFG1, 2, @curr_rate)
+    case rate
+        0..50, 876:
+            rate := 1000 / (rate * 20)
+        other:
+            magopmode(opmode_orig)              ' restore user op. mode
+            curr_rate := 1000 / ((curr_rate & core#BURST_DRATE_BITS) * 20)
+            if curr_rate
+                return
+            else
+                return 876
+
+    rate := ((curr_rate & core#BURST_DRATE_MASK) | rate) & core#CFG1_MASK
+    writereg(core#CFG1, 2, @rate)
+    magopmode(opmode_orig)                      ' restore user op. mode
 
 PUB MagDataReady{}: flag
 
@@ -131,8 +152,7 @@ PUB MagOpMode(mode): curr_mode
 '       WOC (2): Wake-On-Change
 '       CONT (2): Continuous measurement
 '   Any other value polls the chip and returns the current setting
-    curr_mode := 0
-    curr_mode := (readstatus{} >> 5) & %111             ' Read status byte
+    curr_mode := (readstatus{} >> core#MODE) & core#MODE_BITS
     case mode
         SINGLE:
             if curr_mode <> SINGLE
@@ -145,7 +165,7 @@ PUB MagOpMode(mode): curr_mode
             if curr_mode <> CONT
                 command(core#START_BURST_MODE, core#ALL, 0, 0)
                 time.msleep(10)
-        other:'invalid
+        other:
             return curr_mode
 
 PUB MagScale(gauss): curr_scl
