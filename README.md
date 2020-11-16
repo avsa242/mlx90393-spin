@@ -35,7 +35,7 @@ P1/SPIN1:
 
 Implement these methods:
 - [ ] MagBias()
-- [ ] MagDataRate()
+- [x] MagDataRate()
 - [ ] MagGauss()
 - [ ] MagScale()
 - [ ] Temperature()

@@ -5,7 +5,7 @@
     Description: Driver for the Melexis MLX90393 3DoF magnetometer
     Copyright (c) 2020
     Started Aug 27, 2020
-    Updated Nov 15, 2020
+    Updated Nov 16, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -142,7 +142,7 @@ PUB MagDataReady{}: flag
 
     return ina[_INT_PIN] == 1
 
-PUB MagGauss(ptr_x, ptr_y_, ptr_z)
+PUB MagGauss(ptr_x, ptr_y, ptr_z)
 ' TODO
 
 PUB MagOpMode(mode): curr_mode
@@ -150,7 +150,7 @@ PUB MagOpMode(mode): curr_mode
 '   Valid values:
 '       SINGLE (0): Single-shot measurement
 '       WOC (2): Wake-On-Change
-'       CONT (2): Continuous measurement
+'       CONT (4): Continuous measurement
 '   Any other value polls the chip and returns the current setting
     curr_mode := (readstatus{} >> core#MODE) & core#MODE_BITS
     case mode
@@ -164,7 +164,7 @@ PUB MagOpMode(mode): curr_mode
         CONT:
             if curr_mode <> CONT
                 command(core#START_BURST_MODE, core#ALL, 0, 0)
-                time.msleep(10)
+                time.msleep(10) 'xxx only about 2ms until first ready pulse
         other:
             return curr_mode
 
@@ -186,11 +186,12 @@ PUB Reset{}: status
 
 PUB TempData{}: temp_raw
 ' Read temperature data
-'   Returns: Raw temperature word, s16
+'   Returns: Raw temperature word, s16 (sign-extended)
     return ~~_last_temp
 
 PUB Temperature{}: temp
-' TODO
+' Temperature, in hundredths of a degree
+    return ((((tempdata{} & $FFFF) * 1_000) - 46244_000) / 45_2) + 25_00
 
 PUB TempScale(scale): curr_scl
 ' TODO

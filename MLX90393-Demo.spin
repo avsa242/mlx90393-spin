@@ -5,7 +5,7 @@
     Description: Demo of the MLX90393 driver
     Copyright (c) 2020
     Started Aud 27, 2020
-    Updated Nov 15, 2020
+    Updated Nov 16, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -48,7 +48,6 @@ PUB Main{} | dispmode
     mag.magopmode(mag#CONT)
     mag.magaxisenabled(%111)
     mag.magdatarate(50)
-
     ser.hidecursor{}
     dispmode := 0
 
