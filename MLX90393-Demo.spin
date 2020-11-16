@@ -50,6 +50,7 @@ PUB Main{} | dispmode
     mag.magopmode(mag#CONT)                                 ' SINGLE (0), CONT (4)
     mag.magaxisenabled(%111)                                ' %XYZ (000..111)
     mag.magdatarate(50)                                     ' 0 (~0.8Hz) .. 50, 876
+    mag.magscale(7)
     mag.tempscale(C)                                        ' C (0), or F (1)
 
     ser.hidecursor{}
@@ -152,6 +153,10 @@ PUB DisplaySettings{} | mxo, myo, mzo
 
     ser.str(string("MagDataRate: "))
     ser.dec(mag.magdatarate(-2))
+    ser.newline
+
+    ser.str(string("MagScale: "))
+    ser.dec(mag.magscale(-2))
     ser.newline
 
 PRI Decimal(scaled, divisor) | whole[4], part[4], places, tmp

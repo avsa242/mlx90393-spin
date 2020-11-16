@@ -28,6 +28,7 @@ CON
 
 ' Measurement modes
     SINGLE              = 0
+    IDLE                = 0                     ' alias for SINGLE
     WOC                 = 2
     CONT                = 4
 
@@ -42,6 +43,7 @@ CON
 VAR
 
     long _last_temp
+    long _mag_cnts_per_lsb
     byte _INT_PIN
     byte _axes_enabled
     byte _status
@@ -125,7 +127,7 @@ PUB MagDataRate(rate): curr_rate | opmode_orig
 '   Any other value polls the chip and returns the current setting
 '   NOTE: Values 0..50 are approximated
     opmode_orig := magopmode(-2)                ' store user op. mode
-    magopmode(SINGLE)                           ' must be in idle to read regs
+    magopmode(IDLE)                             ' must be in idle to read regs
     curr_rate := 0
     readreg(core#CFG1, 2, @curr_rate)
     case rate
@@ -147,7 +149,8 @@ PUB MagDataRate(rate): curr_rate | opmode_orig
     magopmode(opmode_orig)                      ' restore user op. mode
 
 PUB MagDataReady{}: flag
-
+' Flag indicating magnetometer data is ready
+'   Returns: TRUE (-1) if data ready, FALSE (0) otherwise
     return ina[_INT_PIN] == 1
 
 PUB MagGauss(ptr_x, ptr_y, ptr_z)
@@ -157,6 +160,7 @@ PUB MagOpMode(mode): curr_mode
 ' Set magnetometer operating mode
 '   Valid values:
 '       SINGLE (0): Single-shot measurement
+'       IDLE (0): alias for SINGLE
 '       WOC (2): Wake-On-Change
 '       CONT (4): Continuous measurement
 '   Any other value polls the chip and returns the current setting
@@ -176,8 +180,26 @@ PUB MagOpMode(mode): curr_mode
         other:
             return curr_mode
 
-PUB MagScale(gauss): curr_scl
-' TODO
+PUB MagScale(scale): curr_scl | opmode_orig
+' Set magnetometer full-scale range
+'   Valid values: TBD
+'   Any other value polls the chip and returns the current setting
+    opmode_orig := magopmode(-2)                ' store user's opmode
+    magopmode(IDLE)                             ' switch to idle to read/write
+    curr_scl := 0
+    readreg(core#CFG0, 2, @curr_scl)
+    case scale
+        0..7:
+            _mag_cnts_per_lsb := lookupz(scale: 1_000, 1_333, 1_666, 2_000,{
+                                            } 2_500, 3_000, 4_000, 5_000)
+            scale <<= core#GAIN_SEL
+        other:
+            magopmode(opmode_orig)              ' restore user's opmode
+            return ((curr_scl >> core#GAIN_SEL) & core#GAIN_SEL_BITS)
+
+    scale := ((curr_scl & core#GAIN_SEL_MASK) | scale) & core#CFG0_MASK
+    writereg(core#CFG0, 2, @scale)
+    magopmode(opmode_orig)
 
 PUB MeasureMag{}: status
 ' Perform a measurement

@@ -37,9 +37,9 @@ Implement these methods:
 - [ ] MagBias()
 - [x] MagDataRate()
 - [ ] MagGauss()
-- [ ] MagScale()
-- [ ] Temperature()
-- [ ] TempScale()
+- [ ] MagScale() - WIP
+- [x] Temperature()
+- [x] TempScale()
 
 Other:
 - [ ] Port to P2/SPIN2
