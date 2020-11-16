@@ -24,6 +24,9 @@ CON
     INT_PIN     = 22                            ' required (data ready flag)
 ' --
 
+    C           = 0
+    F           = 1
+
     DAT_X_COL   = 20
     DAT_Y_COL   = DAT_X_COL + 15
     DAT_Z_COL   = DAT_Y_COL + 15
@@ -44,10 +47,11 @@ VAR
 PUB Main{} | dispmode
 
     setup{}
+    mag.magopmode(mag#CONT)                                 ' SINGLE (0), CONT (4)
+    mag.magaxisenabled(%111)                                ' %XYZ (000..111)
+    mag.magdatarate(50)                                     ' 0 (~0.8Hz) .. 50, 876
+    mag.tempscale(C)                                        ' C (0), or F (1)
 
-    mag.magopmode(mag#CONT)
-    mag.magaxisenabled(%111)
-    mag.magdatarate(50)
     ser.hidecursor{}
     dispmode := 0
 

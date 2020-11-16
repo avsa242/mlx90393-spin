@@ -35,12 +35,17 @@ CON
     Y_AXIS              = 1
     Z_AXIS              = 2
 
+' Temperature scales
+    C                   = 0
+    F                   = 1
+
 VAR
 
     long _last_temp
     byte _INT_PIN
     byte _axes_enabled
     byte _status
+    byte _temp_scale
 
 OBJ
 
@@ -124,15 +129,18 @@ PUB MagDataRate(rate): curr_rate | opmode_orig
     curr_rate := 0
     readreg(core#CFG1, 2, @curr_rate)
     case rate
-        0..50, 876:
+        1..50, 876:
             rate := 1000 / (rate * 20)
+        0:                                      ' ~0.8Hz
+            rate := 63
         other:
             magopmode(opmode_orig)              ' restore user op. mode
-            curr_rate := 1000 / ((curr_rate & core#BURST_DRATE_BITS) * 20)
-            if curr_rate
-                return
-            else
-                return 876
+            curr_rate &= core#BURST_DRATE_BITS
+            case curr_rate
+                0:
+                    return 876
+                1..63:
+                    return 1000 / (curr_rate * 20)
 
     rate := ((curr_rate & core#BURST_DRATE_MASK) | rate) & core#CFG1_MASK
     writereg(core#CFG1, 2, @rate)
@@ -191,14 +199,31 @@ PUB TempData{}: temp_raw
 
 PUB Temperature{}: temp
 ' Temperature, in hundredths of a degree
-    return ((((tempdata{} & $FFFF) * 1_000) - 46244_000) / 45_2) + 25_00
+    return calctemp(tempdata{})
 
 PUB TempScale(scale): curr_scl
-' TODO
+' Set temperature scale used by Temperature method
+'   Valid values:
+'      *C (0): Celsius
+'       F (1): Fahrenheit
+'   Any other value returns the current setting
+    case scale
+        C, F:
+            _temp_scale := scale
+        other:
+            return _temp_scale
 
-PRI exit{}: status
-' Exit mode
-    status := command(core#EXIT_MODE, 0, 0, 0)
+PRI calcTemp(temp_word): temp_cal
+' Calculate temperature, using temperature word
+'   Returns: temperature, in hundredths of a degree, in chosen scale
+    temp_cal := ((((temp_word & $FFFF) * 1_000) - 46244_000) / 45_2) + 25_00
+    case _temp_scale
+        C:
+            return
+        F:
+            return ((temp_cal * 90) / 50) + 32_00
+        other:
+            return FALSE
 
 PRI command(cmd, arg, nr_rdbytes, ptr_buff): status | cmd_pkt, tmp
 ' Send command with arg to device
@@ -247,6 +272,10 @@ PRI command(cmd, arg, nr_rdbytes, ptr_buff): status | cmd_pkt, tmp
             i2c.stop{}
         other:
             return
+
+PRI exit{}: status
+' Exit mode
+    status := command(core#EXIT_MODE, 0, 0, 0)
 
 PUB readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
 ' Read nr_bytes from device
