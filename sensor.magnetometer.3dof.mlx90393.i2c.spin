@@ -20,6 +20,11 @@ CON
     DEF_HZ              = 100_000
     I2C_MAX_FREQ        = core#I2C_MAX_FREQ
 
+    SENS_XY_00          = 0_196
+    SENS_Z_00           = 0_316
+    SENS_XY_0C          = 0_150
+    SENS_Z_0C           = 0_242
+
 ' Measurement selection bits
     Z                   = 3
     Y                   = 2
@@ -43,7 +48,8 @@ CON
 VAR
 
     long _last_temp
-    long _mag_cnts_per_lsb
+    long _mag_cnts_per_lsb[3]
+    word _adcoffset
     byte _INT_PIN
     byte _axes_enabled
     byte _status
@@ -91,6 +97,30 @@ PUB LastTemp{}
 '   Returns: Raw temperature word, s16
     return ~~_last_temp
 
+PUB MagADCRes(adcres): curr_res | opmode_orig
+' Set magnetometer ADC resolution, in bits
+'   Valid values: 16..19
+'   Any other value polls the chip and returns the current setting
+    opmode_orig := magopmode(-2)                ' store user op. mode
+    magopmode(IDLE)                             ' must be in idle to read regs
+    curr_res := 0
+    readreg(core#CFG2, 2, @curr_res)
+    case adcres
+        16..19:
+            ' map adcres (bits) 19, 18, 17, 16 to register vals 0, 1, 2, 3
+            adcres := lookdownz(adcres: 19, 18, 17, 16)
+            _adcoffset := lookupz(adcres: 0, 0, 32768, 16384)
+            adcres := (adcres << core#RES_X) | (adcres << core#RES_Y) |{
+                    } (adcres << core#RES_Z)    ' set all three axes the same
+        other:
+            magopmode(opmode_orig)              ' restore user op. mode
+            curr_res := ((curr_res >> core#RES_X) & core#RES_X_BITS)
+            return lookupz(curr_res: 19, 18, 17, 16)
+
+    adcres := ((curr_res & core#RES_MASK) | adcres) & core#CFG2_MASK
+    writereg(core#CFG2, 2, @adcres)
+    magopmode(opmode_orig)
+
 PUB MagAxisEnabled(xyz_mask): curr_mask 'TODO
 ' Enable magnetometer axis per bitmask
 '   Valid values:
@@ -116,9 +146,9 @@ PUB MagData(ptr_x, ptr_y, ptr_z): status | tmp[2]
     status := command(core#READ_MEAS, core#ALL, 8, @tmp)
     longfill(ptr_x, 0, 3)
 
-    long[ptr_x] := ~~tmp.word[2]
-    long[ptr_y] := ~~tmp.word[1]
-    long[ptr_z] := ~~tmp.word[0]
+    long[ptr_x] := ~~tmp.word[2] - _adcoffset
+    long[ptr_y] := ~~tmp.word[1] - _adcoffset
+    long[ptr_z] := ~~tmp.word[0] - _adcoffset
     _last_temp := tmp.word[3]                   ' Read in the temp, too
 
 PUB MagDataRate(rate): curr_rate | opmode_orig
@@ -153,8 +183,15 @@ PUB MagDataReady{}: flag
 '   Returns: TRUE (-1) if data ready, FALSE (0) otherwise
     return ina[_INT_PIN] == 1
 
-PUB MagGauss(ptr_x, ptr_y, ptr_z)
+PUB MagGauss(ptr_x, ptr_y, ptr_z) | tmp[3]
 ' TODO
+    magdata(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
+
+    tmp[X_AXIS] *= _mag_cnts_per_lsb[X_AXIS]
+    tmp[Y_AXIS] *= _mag_cnts_per_lsb[Y_AXIS]
+    tmp[Z_AXIS] *= _mag_cnts_per_lsb[Z_AXIS]
+
+    longmove(ptr_x, @tmp, 3)                    ' copy local vars to pointers
 
 PUB MagOpMode(mode): curr_mode
 ' Set magnetometer operating mode
@@ -180,8 +217,8 @@ PUB MagOpMode(mode): curr_mode
         other:
             return curr_mode
 
-PUB MagScale(scale): curr_scl | opmode_orig
-' Set magnetometer full-scale range
+PUB MagScale(scale): curr_scl | opmode_orig, adcres
+' Set magnetometer full-scale range 'XXX units
 '   Valid values: TBD
 '   Any other value polls the chip and returns the current setting
     opmode_orig := magopmode(-2)                ' store user's opmode
@@ -190,8 +227,18 @@ PUB MagScale(scale): curr_scl | opmode_orig
     readreg(core#CFG0, 2, @curr_scl)
     case scale
         0..7:
-            _mag_cnts_per_lsb := lookupz(scale: 1_000, 1_333, 1_666, 2_000,{
-                                            } 2_500, 3_000, 4_000, 5_000)
+' scale     1      1000   1000         1
+' calc =    raw * [gain * sens_axis * (1 << res_axis)]
+            _mag_cnts_per_lsb[X_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
+                                        } 2_000, 2_500, 3_000, 4_000, 5_000)
+            _mag_cnts_per_lsb[Y_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
+                                        } 2_000, 2_500, 3_000, 4_000, 5_000)
+            _mag_cnts_per_lsb[Z_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
+                                        } 2_000, 2_500, 3_000, 4_000, 5_000)
+            adcres := 1 << (3 - (magadcres(-2)-16)) ' map 19..16bits to 0..3
+            _mag_cnts_per_lsb[X_AXIS] *= (SENS_XY_0C * adcres)
+            _mag_cnts_per_lsb[Y_AXIS] *= (SENS_XY_0C * adcres)
+            _mag_cnts_per_lsb[Z_AXIS] *= (SENS_Z_0C * adcres)
             scale <<= core#GAIN_SEL
         other:
             magopmode(opmode_orig)              ' restore user's opmode

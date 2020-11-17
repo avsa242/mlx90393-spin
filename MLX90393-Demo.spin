@@ -48,6 +48,7 @@ PUB Main{} | dispmode
 
     setup{}
     mag.magopmode(mag#CONT)                                 ' SINGLE (0), CONT (4)
+    mag.magadcres(19)                                       ' 16..19
     mag.magaxisenabled(%111)                                ' %XYZ (000..111)
     mag.magdatarate(50)                                     ' 0 (~0.8Hz) .. 50, 876
     mag.magscale(7)
@@ -70,7 +71,7 @@ PUB Main{} | dispmode
                 calibrate{}
                 displaysettings{}
             "r", "R":                                       ' Change display mode: raw/calculated
-                ser.position(0, 10)
+                ser.position(0, 12)
                 repeat 2
                     ser.clearline{}
                     ser.newline{}
@@ -97,11 +98,11 @@ PUB MagCalc{} | mx, my, mz
     mag.maggauss (@mx, @my, @mz)
     ser.str(string("Mag gauss:   "))
     ser.position(DAT_X_COL, 12)
-    decimal(mx, 1000)
+    decimal(mx, 1_000_000)
     ser.position(DAT_Y_COL, 12)
-    decimal(my, 1000)
+    decimal(my, 1_000_000)
     ser.position(DAT_Z_COL, 12)
-    decimal(mz, 1000)
+    decimal(mz, 1_000_000)
     ser.clearline{}
     ser.newline{}
 
@@ -157,6 +158,10 @@ PUB DisplaySettings{} | mxo, myo, mzo
 
     ser.str(string("MagScale: "))
     ser.dec(mag.magscale(-2))
+    ser.newline
+
+    ser.str(string("MagADCRes: "))
+    ser.dec(mag.magadcres(-2))
     ser.newline
 
 PRI Decimal(scaled, divisor) | whole[4], part[4], places, tmp

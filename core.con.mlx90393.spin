@@ -5,7 +5,7 @@
     Description: Low-level constants
     Copyright (c) 2020
     Started Aug 27, 2020
-    Updated Nov 15, 2020
+    Updated Nov 16, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -99,12 +99,14 @@ CON
         RES_Z_BITS      = %11
         RES_Y_BITS      = %11
         RES_X_BITS      = %11
+        RES_BITS        = %11_11_11
         DIG_FILT_BITS   = %111
         OSR_BITS        = %11
         OSR2_MASK       = (OSR2_BITS << OSR2) ^ CFG2_MASK
         RES_Z_MASK      = (RES_Z_BITS << RES_Z) ^ CFG2_MASK
         RES_Y_MASK      = (RES_Y_BITS << RES_Y) ^ CFG2_MASK
         RES_X_MASK      = (RES_X_BITS << RES_X) ^ CFG2_MASK
+        RES_MASK        = (RES_BITS << RES_X) ^ CFG2_MASK
         DIG_FILT_MASK   = (DIG_FILT_BITS << DIG_FILT) ^ CFG2_MASK
         OSR_MASK        = (OSR_BITS << OSR) ^ CFG2_MASK
 
