@@ -48,7 +48,7 @@ PUB Main{} | dispmode
 
     setup{}
     mag.magopmode(mag#CONT)                                 ' SINGLE (0), CONT (4)
-    mag.magadcres(19)                                       ' 16..19
+    mag.magadcres(16)                                       ' 16..19
     mag.magaxisenabled(%111)                                ' %XYZ (000..111)
     mag.magdatarate(50)                                     ' 0 (~0.8Hz) .. 50, 876
     mag.magscale(7)

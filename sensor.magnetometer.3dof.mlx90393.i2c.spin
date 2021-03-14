@@ -119,15 +119,15 @@ PUB MagADCRes(adcres): curr_res | opmode_orig
     readreg(core#CFG2, 2, @curr_res)
     case adcres
         16..19:
-            ' map adcres (bits) 19, 18, 17, 16 to register vals 0, 1, 2, 3
-            adcres := lookdownz(adcres: 19, 18, 17, 16)
+            ' map adcres (bits) 16, 17, 18, 19 to register vals 0, 1, 2, 3
+            adcres := lookdownz(adcres: 16, 17, 18, 19)
             _adcoffset := lookupz(adcres: 0, 0, 32768, 16384)
             adcres := (adcres << core#RES_X) | (adcres << core#RES_Y) |{
                     } (adcres << core#RES_Z)    ' set all three axes the same
         other:
             magopmode(opmode_orig)              ' restore user op. mode
             curr_res := ((curr_res >> core#RES_X) & core#RES_X_BITS)
-            return lookupz(curr_res: 19, 18, 17, 16)
+            return lookupz(curr_res: 16, 17, 18, 19)
 
     adcres := ((curr_res & core#RES_MASK) | adcres) & core#CFG2_MASK
     writereg(core#CFG2, 2, @adcres)
@@ -229,7 +229,7 @@ PUB MagOpMode(mode): curr_mode
         other:
             return curr_mode
 
-PUB MagScale(scale): curr_scl | opmode_orig, adcres
+PUB MagScale(scale): curr_scl | opmode_orig, adcres, axis
 ' Set magnetometer full-scale range 'XXX units
 '   Valid values: TBD
 '   Any other value polls the chip and returns the current setting
@@ -239,18 +239,15 @@ PUB MagScale(scale): curr_scl | opmode_orig, adcres
     readreg(core#CFG0, 2, @curr_scl)
     case scale
         0..7:
-' scale     1      1000   1000         1
-' calc =    raw * [gain * sens_axis * (1 << res_axis)]
-            _mres[X_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
-                                        } 2_000, 2_500, 3_000, 4_000, 5_000)
-            _mres[Y_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
-                                        } 2_000, 2_500, 3_000, 4_000, 5_000)
-            _mres[Z_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
-                                        } 2_000, 2_500, 3_000, 4_000, 5_000)
-            adcres := 1 << (3 - (magadcres(-2)-16)) ' map 19..16bits to 0..3
-            _mres[X_AXIS] *= (SENS_XY_0C * adcres)
-            _mres[Y_AXIS] *= (SENS_XY_0C * adcres)
-            _mres[Z_AXIS] *= (SENS_Z_0C * adcres)
+            adcres := 1 << (magadcres(-2)-16)   ' map 16..19bits to 0..3
+            repeat axis from X_AXIS to Y_AXIS
+                _mres[axis] := lookupz(scale: 0_751, 0_601, 0_451, {
+}                       0_376, 0_300, 0_250, 0_200, 0_150)
+                _mres[axis] := (_mres[axis] * SENS_XY_0C * adcres) / 1000
+            ' Z-axis sensitivity is different from X and Y:
+            _mres[Z_AXIS] := lookupz(scale: 1_210, 0_968, 0_726, {
+}                   0_605, 0_484, 0_403, 0_323, 0_242)
+            _mres[Z_AXIS] := (_mres[Z_AXIS] * SENS_Z_0C * adcres) / 1000
             scale <<= core#GAIN_SEL
         other:
             magopmode(opmode_orig)              ' restore user's opmode
