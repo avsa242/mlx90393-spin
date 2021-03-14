@@ -48,7 +48,7 @@ CON
 VAR
 
     long _last_temp
-    long _mag_cnts_per_lsb[3]
+    long _mres[3]
     word _adcoffset
     byte _INT_PIN
     byte _axes_enabled
@@ -57,9 +57,9 @@ VAR
 
 OBJ
 
-    i2c : "com.i2c"                                     ' PASM I2C Driver
-    core: "core.con.mlx90393.spin"                      ' low-level constants
-    time: "time"                                        ' timing
+    i2c : "com.i2c"                             ' PASM I2C Driver
+    core: "core.con.mlx90393"                   ' HW-specific constants
+    time: "time"                                ' timing
 
 PUB Null{}
 ' This is not a top-level object
@@ -187,9 +187,9 @@ PUB MagGauss(ptr_x, ptr_y, ptr_z) | tmp[3]
 ' TODO
     magdata(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
 
-    tmp[X_AXIS] *= _mag_cnts_per_lsb[X_AXIS]
-    tmp[Y_AXIS] *= _mag_cnts_per_lsb[Y_AXIS]
-    tmp[Z_AXIS] *= _mag_cnts_per_lsb[Z_AXIS]
+    tmp[X_AXIS] *= _mres[X_AXIS]
+    tmp[Y_AXIS] *= _mres[Y_AXIS]
+    tmp[Z_AXIS] *= _mres[Z_AXIS]
 
     longmove(ptr_x, @tmp, 3)                    ' copy local vars to pointers
 
@@ -229,16 +229,16 @@ PUB MagScale(scale): curr_scl | opmode_orig, adcres
         0..7:
 ' scale     1      1000   1000         1
 ' calc =    raw * [gain * sens_axis * (1 << res_axis)]
-            _mag_cnts_per_lsb[X_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
+            _mres[X_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
                                         } 2_000, 2_500, 3_000, 4_000, 5_000)
-            _mag_cnts_per_lsb[Y_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
+            _mres[Y_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
                                         } 2_000, 2_500, 3_000, 4_000, 5_000)
-            _mag_cnts_per_lsb[Z_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
+            _mres[Z_AXIS] := lookupz(scale: 1_000, 1_333, 1_666,{
                                         } 2_000, 2_500, 3_000, 4_000, 5_000)
             adcres := 1 << (3 - (magadcres(-2)-16)) ' map 19..16bits to 0..3
-            _mag_cnts_per_lsb[X_AXIS] *= (SENS_XY_0C * adcres)
-            _mag_cnts_per_lsb[Y_AXIS] *= (SENS_XY_0C * adcres)
-            _mag_cnts_per_lsb[Z_AXIS] *= (SENS_Z_0C * adcres)
+            _mres[X_AXIS] *= (SENS_XY_0C * adcres)
+            _mres[Y_AXIS] *= (SENS_XY_0C * adcres)
+            _mres[Z_AXIS] *= (SENS_Z_0C * adcres)
             scale <<= core#GAIN_SEL
         other:
             magopmode(opmode_orig)              ' restore user's opmode
