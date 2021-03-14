@@ -3,9 +3,9 @@
     Filename: sensor.magnetometer.3dof.mlx90393.i2c.spin
     Author: Jesse Burt
     Description: Driver for the Melexis MLX90393 3DoF magnetometer
-    Copyright (c) 2020
+    Copyright (c) 2021
     Started Aug 27, 2020
-    Updated Nov 16, 2020
+    Updated Mar 14, 2021
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -101,6 +101,14 @@ PUB Defaults{}
 ' Set factory defaults
     reset{}
 
+PUB Preset_Active{}
+' Like defaults, but
+'   * enables sensor acquisition
+    reset{}
+    magopmode(CONT)
+    magscale(7)
+    tempscale(C)
+
 PUB CalibrateMag{}
 ' TODO
 
@@ -123,7 +131,7 @@ PUB MagADCRes(adcres): curr_res | opmode_orig
             adcres := lookdownz(adcres: 16, 17, 18, 19)
             _adcoffset := lookupz(adcres: 0, 0, 32768, 16384)
             adcres := (adcres << core#RES_X) | (adcres << core#RES_Y) |{
-                    } (adcres << core#RES_Z)    ' set all three axes the same
+}           (adcres << core#RES_Z)              ' set all three axes the same
         other:
             magopmode(opmode_orig)              ' restore user op. mode
             curr_res := ((curr_res >> core#RES_X) & core#RES_X_BITS)
@@ -195,15 +203,16 @@ PUB MagDataReady{}: flag
 '   Returns: TRUE (-1) if data ready, FALSE (0) otherwise
     return ina[_INT_PIN] == 1
 
-PUB MagGauss(ptr_x, ptr_y, ptr_z) | tmp[3]
-' TODO
+PUB MagGauss(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
+' Read magnetometer data, in hundred-thousandths of a Gauss
+'   e.g., 50_228 = 0.50228Gs
     magdata(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
 
     tmp[X_AXIS] *= _mres[X_AXIS]
     tmp[Y_AXIS] *= _mres[Y_AXIS]
     tmp[Z_AXIS] *= _mres[Z_AXIS]
 
-    longmove(ptr_x, @tmp, 3)                    ' copy local vars to pointers
+    longmove(ptr_x, @tmp, MAG_DOF)              ' copy local vars to pointers
 
 PUB MagOpMode(mode): curr_mode
 ' Set magnetometer operating mode
@@ -242,11 +251,11 @@ PUB MagScale(scale): curr_scl | opmode_orig, adcres, axis
             adcres := 1 << (magadcres(-2)-16)   ' map 16..19bits to 0..3
             repeat axis from X_AXIS to Y_AXIS
                 _mres[axis] := lookupz(scale: 0_751, 0_601, 0_451, {
-}                       0_376, 0_300, 0_250, 0_200, 0_150)
+}               0_376, 0_300, 0_250, 0_200, 0_150)
                 _mres[axis] := (_mres[axis] * SENS_XY_0C * adcres) / 1000
             ' Z-axis sensitivity is different from X and Y:
             _mres[Z_AXIS] := lookupz(scale: 1_210, 0_968, 0_726, {
-}                   0_605, 0_484, 0_403, 0_323, 0_242)
+}           0_605, 0_484, 0_403, 0_323, 0_242)
             _mres[Z_AXIS] := (_mres[Z_AXIS] * SENS_Z_0C * adcres) / 1000
             scale <<= core#GAIN_SEL
         other:
@@ -256,6 +265,17 @@ PUB MagScale(scale): curr_scl | opmode_orig, adcres, axis
     scale := ((curr_scl & core#GAIN_SEL_MASK) | scale) & core#CFG0_MASK
     writereg(core#CFG0, 2, @scale)
     magopmode(opmode_orig)
+
+PUB MagTesla(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
+' Read magnetometer data, in hundred-thousandths of a micro-Tesla
+'   e.g., 50_228 = 50.228uT
+    maggauss(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
+
+    tmp[X_AXIS] *= 100
+    tmp[Y_AXIS] *= 100
+    tmp[Z_AXIS] *= 100
+
+    longmove(ptr_x, @tmp, MAG_DOF)              ' copy local vars to pointers
 
 PUB MeasureMag{}: status
 ' Perform a measurement
