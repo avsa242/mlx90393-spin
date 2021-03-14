@@ -20,6 +20,15 @@ CON
     DEF_HZ              = 100_000
     I2C_MAX_FREQ        = core#I2C_MAX_FREQ
 
+' Indicate to user apps how many Degrees of Freedom each sub-sensor has
+'   (also imply whether or not it has a particular sensor)
+    ACCEL_DOF           = 0
+    GYRO_DOF            = 0
+    MAG_DOF             = 3
+    BARO_DOF            = 0
+    DOF                 = ACCEL_DOF + GYRO_DOF + MAG_DOF + BARO_DOF
+
+' Axis-specific sensitivity settings
     SENS_XY_00          = 0_196
     SENS_Z_00           = 0_316
     SENS_XY_0C          = 0_150
@@ -57,37 +66,40 @@ VAR
 
 OBJ
 
-    i2c : "com.i2c"                             ' PASM I2C Driver
+    i2c : "com.i2c"                             ' PASM I2C engine
     core: "core.con.mlx90393"                   ' HW-specific constants
     time: "time"                                ' timing
 
 PUB Null{}
 ' This is not a top-level object
 
-PUB Start{}: okay
-' Standard Propeller I2C pins and 100kHz, no INT pin
-    okay := startx (DEF_SCL, DEF_SDA, DEF_HZ, -1)
+PUB Start{}: status
+' Start using "standard" Propeller I2C pins and 100kHz, no INT pin
+    return startx(DEF_SCL, DEF_SDA, DEF_HZ, -1)
 
-PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN): okay
-
-    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31)
-        if I2C_HZ =< core#I2C_MAX_FREQ
-            if okay := i2c.setupx (SCL_PIN, SDA_PIN, I2C_HZ)' I2C Object Started?
-                time.usleep(core#TPOR)
-                if lookdown(INT_PIN: 0..31)                 ' Valid INT_PIN?
-                    _INT_PIN := INT_PIN                     ' Copy it to hub var
-                    dira[_INT_PIN] := 0
-                if i2c.present(SLAVE_WR)                    ' Test bus presence
-                    return
-
-    return FALSE                                            ' Something above failed
+PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN): status
+' Start using custom I/O settings
+    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
+}   I2C_HZ =< core#I2C_MAX_FREQ
+        if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
+            time.usleep(core#TPOR)              ' wait for device to be ready
+            if lookdown(INT_PIN: 0..31)         ' Valid INT_PIN?
+                _INT_PIN := INT_PIN             ' Copy it to hub var
+                dira[_INT_PIN] := 0
+            if i2c.present(SLAVE_WR)            ' test device bus presencxe
+                return
+    ' if this point is reached, something above failed
+    ' Double check I/O pin assignments, connections, power
+    ' Lastly - make sure you have at least one free core/cog
+    return FALSE
 
 PUB Stop{}
 ' Put any other housekeeping code here required/recommended by your device before shutting down
-    i2c.terminate
+    i2c.deinit{}
 
 PUB Defaults{}
 ' Set factory defaults
+    reset{}
 
 PUB CalibrateMag{}
 ' TODO
@@ -302,19 +314,16 @@ PRI command(cmd, arg, nr_rdbytes, ptr_buff): status | cmd_pkt, tmp
             cmd_pkt.byte[0] := SLAVE_WR
             cmd_pkt.byte[1] := cmd | arg        ' cmd[7..4] | arg[3..0]
 
-            i2c.start
-            repeat tmp from 0 to 1
-                i2c.write(cmd_pkt.byte[tmp])
-
-            i2c.start                           ' first byte read is always
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 2)
+            i2c.start{}                         ' first byte read is always
             i2c.write(SLAVE_RD)                 '   the status byte
             _status := status := i2c.read(i2c#ACK)
 
 ' How many bytes are ready to read? Make sure it matches what's requested:
             if nr_rdbytes == (2 * (status & core#D_BITS) + 2)
-                repeat tmp from nr_rdbytes-1 to 0
-                    byte[ptr_buff][tmp] := i2c.read(tmp == 0)
-                i2c.stop
+                i2c.rdblock_msbf(ptr_buff, nr_rdbytes, i2c#NAK)
+                i2c.stop{}
             else
                 i2c.stop{}
                 return false
@@ -322,22 +331,19 @@ PRI command(cmd, arg, nr_rdbytes, ptr_buff): status | cmd_pkt, tmp
             cmd_pkt.byte[0] := SLAVE_WR
             cmd_pkt.byte[1] := cmd | arg
 
-            i2c.start
-            repeat tmp from 0 to 1
-                i2c.write(cmd_pkt.byte[tmp])
-
-            i2c.start
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 2)
+            i2c.start{}
             i2c.write(SLAVE_RD)
             status := i2c.read(i2c#NAK)
-            i2c.stop
+            i2c.stop{}
             time.msleep(2)                      ' wait for measurement
         core#RESET:
             cmd_pkt.byte[0] := SLAVE_WR
             cmd_pkt.byte[1] := cmd
 
-            i2c.start
-            repeat tmp from 0 to 1
-                i2c.write(cmd_pkt.byte[tmp])
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 2)
             i2c.stop{}
         other:
             return
@@ -355,15 +361,12 @@ PUB readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
             cmd_pkt.byte[1] := core#READ_REG    ' RR command
             cmd_pkt.byte[2] := reg_nr << 2      ' chip requires reg be shifted
 
-            i2c.start
-            repeat tmp from 0 to 2
-                i2c.write(cmd_pkt.byte[tmp])
-
-            i2c.start                           ' first byte read is always
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 3)
+            i2c.start{}                         ' first byte read is always
             i2c.write(SLAVE_RD)                 '   the status byte
             _status := i2c.read(i2c#ACK)
-            repeat tmp from 1 to 0              ' now the data
-                byte[ptr_buff][tmp] := i2c.read(tmp == 0)
+            i2c.rdblock_msbf(ptr_buff, 2, i2c#NAK)
             i2c.stop
         other:
             return
@@ -382,11 +385,9 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff): status | tmp, cmd_pkt[2]
             cmd_pkt.byte[3] := byte[ptr_buff][0]'   ...
             cmd_pkt.byte[4] := reg_nr << 2      ' _now_ the register #
 
-            i2c.start
-            repeat tmp from 0 to 4
-                i2c.write(cmd_pkt.byte[tmp])
-
-            i2c.start
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 5)
+            i2c.start{}
             i2c.write(SLAVE_RD)
             _status := i2c.read(i2c#NAK)        ' update the status byte
             i2c.stop
