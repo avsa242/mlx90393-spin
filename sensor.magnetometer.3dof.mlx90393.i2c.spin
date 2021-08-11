@@ -5,7 +5,7 @@
     Description: Driver for the Melexis MLX90393 3DoF magnetometer
     Copyright (c) 2021
     Started Aug 27, 2020
-    Updated Mar 14, 2021
+    Updated Aug 11, 2021
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -27,6 +27,10 @@ CON
     MAG_DOF             = 3
     BARO_DOF            = 0
     DOF                 = ACCEL_DOF + GYRO_DOF + MAG_DOF + BARO_DOF
+
+' Bias adjustment (AccelBias(), GyroBias(), MagBias()) read or write
+    R                       = 0
+    W                       = 1
 
 ' Axis-specific sensitivity settings
     SENS_XY_00          = 0_196
@@ -156,8 +160,46 @@ PUB MagAxisEnabled(xyz_mask): curr_mask 'TODO
         other:
             return
 
-PUB MagBias(ptr_x, ptr_y, ptr_z, rw)
-' TODO
+PUB MagBias(ptr_x, ptr_y, ptr_z, rw) | tmp[2], opmode_orig
+' Read or write/manually set Magnetometer calibration offset values
+'   Valid values:
+'       rw:
+'           R (0), W (1)
+'       ptr_x, ptr_y, ptr_z:
+'           -32768..32767
+'   NOTE: When rw is set to READ, ptr_x, ptr_y and ptr_z must be addresses
+'       of respective variables to hold the returned calibration offset values
+    opmode_orig := magopmode(-2)                ' store user's opmode
+    magopmode(IDLE)                             ' switch to idle to read/write
+    case rw
+        R:
+            readreg(core#OFFSET_X, 2, @tmp)     ' read the current offsets
+            readreg(core#OFFSET_Y, 2, @tmp.byte[2])
+            readreg(core#OFFSET_Z, 2, @tmp.byte[4])
+            ' offsets are centered around 32768
+            long[ptr_x] := tmp.word[X_AXIS]-32768
+            long[ptr_y] := tmp.word[Y_AXIS]-32768
+            long[ptr_z] := tmp.word[Z_AXIS]-32768
+        W:
+            case ptr_x
+                -32768..32767:
+                other:
+                    return
+            case ptr_y
+                -32768..32767:
+                other:
+                    return
+            case ptr_z
+                -32768..32767:
+                other:
+                    return
+            ptr_x += 32768
+            ptr_y += 32768
+            ptr_z += 32768
+            writereg(core#OFFSET_X, 2, @ptr_x)
+            writereg(core#OFFSET_Y, 2, @ptr_y)
+            writereg(core#OFFSET_Z, 2, @ptr_z)
+    magopmode(opmode_orig)                      ' restore user op. mode
 
 PUB MagData(ptr_x, ptr_y, ptr_z): status | tmp[2]
 ' Read magnetometer data
@@ -253,6 +295,7 @@ PUB MagScale(scale): curr_scl | opmode_orig, adcres, axis
                 _mres[axis] := lookupz(scale: 0_751, 0_601, 0_451, {
 }               0_376, 0_300, 0_250, 0_200, 0_150)
                 _mres[axis] := (_mres[axis] * SENS_XY_0C * adcres) / 1000
+
             ' Z-axis sensitivity is different from X and Y:
             _mres[Z_AXIS] := lookupz(scale: 1_210, 0_968, 0_726, {
 }           0_605, 0_484, 0_403, 0_323, 0_242)
@@ -289,6 +332,24 @@ PUB Reset{}: status
     exit{}
     command(core#RESET, 0, 0, 0)
     time.usleep(core#TPOR)
+
+PUB TempCompensation(state): curr_state | opmode_orig
+' Enable on-chip temperature compensation for magnetometer readings
+'   Valid values: TRUE (-1 or 1) or FALSE
+'   Any other value polls the chip and returns the current setting
+    opmode_orig := magopmode(-2)                ' store user op. mode
+    magopmode(IDLE)                             ' must be in idle to read regs
+    curr_state := 0
+    readreg(core#CFG1, 1, @curr_state)
+    case ||(state)
+        0, 1:
+            state := ||(state) << core#TCMP_EN
+        other:
+            return (((curr_state >> core#TCMP_EN) & 1) == 1)
+
+    state := ((curr_state & core#TCMP_EN_MASK) | state)
+    writereg(core#CFG1, 1, @state)
+    magopmode(opmode_orig)                      ' restore user's opmode
 
 PUB TempData{}: temp_raw
 ' Read temperature data

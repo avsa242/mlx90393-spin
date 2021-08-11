@@ -18,10 +18,10 @@ CON
     LED         = cfg#LED1
     SER_BAUD    = 115_200
 
-    SCL_PIN     = 28
-    SDA_PIN     = 29
+    SCL_PIN     = 13
+    SDA_PIN     = 14
     I2C_HZ      = 400_000                       ' max is 400_000
-    INT_PIN     = 22                            ' required (data ready flag)
+    INT_PIN     = 15                            ' required (data ready flag)
 
     STANDARD    = GAUSS                         ' GAUSS or TESLA
 ' --
