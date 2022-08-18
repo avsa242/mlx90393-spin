@@ -1,5 +1,4 @@
 # mlx90393-spin
-
 ---------------
 
 This is a P8X32A/Propeller, ~~P2X8C4M64P/Propeller 2~~ driver object for the Melexis MLX90393 3DoF magnetometer
@@ -24,28 +23,18 @@ P1/SPIN1:
 
 ## Compiler Compatibility
 
-* P1/SPIN1: OpenSpin (tested with 1.00.81), FlexSpin (tested with 5.2.1-beta)
-* ~~P2/SPIN2: FlexSpin (tested with 4.3.1)~~ _(not implemented yet)_
-* ~~BST~~ (incompatible - no preprocessor)
-* ~~Propeller Tool~~ (incompatible - no preprocessor)
-* ~~PNut~~ (incompatible - no preprocessor)
+| Processor | Language | Compiler               | Backend     | Status                |
+|-----------|----------|------------------------|-------------|-----------------------|
+| P1        | SPIN1    | FlexSpin (5.9.14-beta) | Bytecode    | OK                    |
+| P1        | SPIN1    | FlexSpin (5.9.14-beta) | Native code | OK                    |
+| P1        | SPIN1    | OpenSpin (1.00.81)     | Bytecode    | Untested (deprecated) |
+| P2        | SPIN2    | FlexSpin (5.9.14-beta) | NuCode      | Untested              |
+| P2        | SPIN2    | FlexSpin (5.9.14-beta) | Native code | Not yet implemented   |
+| P1        | SPIN1    | Brad's Spin Tool (any) | Bytecode    | Unsupported           |
+| P1, P2    | SPIN1, 2 | Propeller Tool (any)   | Bytecode    | Unsupported           |
+| P1, P2    | SPIN1, 2 | PNut (any)             | Bytecode    | Unsupported           |
 
 ## Limitations
 
 * Very early in development - may malfunction, or outright fail to build
 
-## TODO
-
-Implement these methods:
-
-- [ ] MagBias()
-- [x] MagDataRate()
-- [x] MagGauss()
-- [x] MagTesla()
-- [ ] MagScale() - WIP
-- [x] Temperature()
-- [x] TempScale()
-
-Other:
-
-- [ ] Port to P2/SPIN2
