@@ -74,14 +74,14 @@ OBJ
     core: "core.con.mlx90393"                   ' HW-specific constants
     time: "time"                                ' timing
 
-PUB Null{}
+PUB null{}
 ' This is not a top-level object
 
-PUB Start{}: status
+PUB start{}: status
 ' Start using "standard" Propeller I2C pins and 100kHz, no INT pin
     return startx(DEF_SCL, DEF_SDA, DEF_HZ, -1)
 
-PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN): status
+PUB startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN): status
 ' Start using custom I/O settings
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
 }   I2C_HZ =< core#I2C_MAX_FREQ
@@ -97,15 +97,15 @@ PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN): status
     ' Lastly - make sure you have at least one free core/cog
     return FALSE
 
-PUB Stop{}
+PUB stop{}
 ' Put any other housekeeping code here required/recommended by your device before shutting down
     i2c.deinit{}
 
-PUB Defaults{}
+PUB defaults{}
 ' Set factory defaults
     reset{}
 
-PUB Preset_Active{}
+PUB preset_active{}
 ' Like defaults, but
 '   * enables sensor acquisition
     reset{}
@@ -113,15 +113,15 @@ PUB Preset_Active{}
     magscale(7)
     tempscale(C)
 
-PUB CalibrateMag{}
+PUB calibratemag{}
 ' TODO
 
-PUB LastTemp{}
+PUB lasttemp{}
 ' Last temperature reading
 '   Returns: Raw temperature word, s16
     return ~~_last_temp
 
-PUB MagADCRes(adcres): curr_res | opmode_orig
+PUB magadcres(adcres): curr_res | opmode_orig
 ' Set magnetometer ADC resolution, in bits
 '   Valid values: 16..19
 '   Any other value polls the chip and returns the current setting
@@ -145,7 +145,7 @@ PUB MagADCRes(adcres): curr_res | opmode_orig
     writereg(core#CFG2, 2, @adcres)
     magopmode(opmode_orig)
 
-PUB MagAxisEnabled(xyz_mask): curr_mask 'TODO
+PUB magaxisenabled(xyz_mask): curr_mask 'TODO
 ' Enable magnetometer axis per bitmask
 '   Valid values:
 '       Bits %210 (xyz):
@@ -160,7 +160,7 @@ PUB MagAxisEnabled(xyz_mask): curr_mask 'TODO
         other:
             return
 
-PUB MagBias(ptr_x, ptr_y, ptr_z, rw) | tmp[2], opmode_orig
+PUB magbias(ptr_x, ptr_y, ptr_z, rw) | tmp[2], opmode_orig
 ' Read or write/manually set Magnetometer calibration offset values
 '   Valid values:
 '       rw:
@@ -201,7 +201,7 @@ PUB MagBias(ptr_x, ptr_y, ptr_z, rw) | tmp[2], opmode_orig
             writereg(core#OFFSET_Z, 2, @ptr_z)
     magopmode(opmode_orig)                      ' restore user op. mode
 
-PUB MagData(ptr_x, ptr_y, ptr_z): status | tmp[2]
+PUB magdata(ptr_x, ptr_y, ptr_z): status | tmp[2]
 ' Read magnetometer data
 '   NOTE: For efficiency, the temperature data is read in as well,
 '       and stored in a hub variable
@@ -213,7 +213,7 @@ PUB MagData(ptr_x, ptr_y, ptr_z): status | tmp[2]
     long[ptr_z] := ~~tmp.word[0] - _adcoffset
     _last_temp := tmp.word[3]                   ' Read in the temp, too
 
-PUB MagDataRate(rate): curr_rate | opmode_orig
+PUB magdatarate(rate): curr_rate | opmode_orig
 ' Set magnetometer data rate, in Hz
 '   Valid values: 0..50, *876
 '   Any other value polls the chip and returns the current setting
@@ -240,12 +240,12 @@ PUB MagDataRate(rate): curr_rate | opmode_orig
     writereg(core#CFG1, 2, @rate)
     magopmode(opmode_orig)                      ' restore user op. mode
 
-PUB MagDataReady{}: flag
+PUB magdataready{}: flag
 ' Flag indicating magnetometer data is ready
 '   Returns: TRUE (-1) if data ready, FALSE (0) otherwise
     return ina[_INT_PIN] == 1
 
-PUB MagGauss(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
+PUB maggauss(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
 ' Read magnetometer data, in hundred-thousandths of a Gauss
 '   e.g., 50_228 = 0.50228Gs
     magdata(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
@@ -256,7 +256,7 @@ PUB MagGauss(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
 
     longmove(ptr_x, @tmp, MAG_DOF)              ' copy local vars to pointers
 
-PUB MagOpMode(mode): curr_mode
+PUB magopmode(mode): curr_mode
 ' Set magnetometer operating mode
 '   Valid values:
 '       SINGLE (0): Single-shot measurement
@@ -280,7 +280,7 @@ PUB MagOpMode(mode): curr_mode
         other:
             return curr_mode
 
-PUB MagScale(scale): curr_scl | opmode_orig, adcres, axis
+PUB magscale(scale): curr_scl | opmode_orig, adcres, axis
 ' Set magnetometer full-scale range 'XXX units
 '   Valid values: TBD
 '   Any other value polls the chip and returns the current setting
@@ -309,7 +309,7 @@ PUB MagScale(scale): curr_scl | opmode_orig, adcres, axis
     writereg(core#CFG0, 2, @scale)
     magopmode(opmode_orig)
 
-PUB MagTesla(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
+PUB magtesla(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
 ' Read magnetometer data, in hundred-thousandths of a micro-Tesla
 '   e.g., 50_228 = 50.228uT
     maggauss(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
@@ -320,20 +320,20 @@ PUB MagTesla(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
 
     longmove(ptr_x, @tmp, MAG_DOF)              ' copy local vars to pointers
 
-PUB MeasureMag{}: status
+PUB measuremag{}: status
 ' Perform a measurement
 '   NOTE: This method only applies to single-shot measurement mode
 '       and will stop continuous measurement mode, if called
     status := command(core#START_SINGLE_MEAS, core#ALL, 0, 0)
 
-PUB Reset{}: status
+PUB reset{}: status
 ' Reset the device
 '   NOTE: A mandatory 2ms delay is waited after resetting
     exit{}
     command(core#RESET, 0, 0, 0)
     time.usleep(core#TPOR)
 
-PUB TempCompensation(state): curr_state | opmode_orig
+PUB tempcompensation(state): curr_state | opmode_orig
 ' Enable on-chip temperature compensation for magnetometer readings
 '   Valid values: TRUE (-1 or 1) or FALSE
 '   Any other value polls the chip and returns the current setting
@@ -351,16 +351,16 @@ PUB TempCompensation(state): curr_state | opmode_orig
     writereg(core#CFG1, 1, @state)
     magopmode(opmode_orig)                      ' restore user's opmode
 
-PUB TempData{}: temp_raw
+PUB tempdata{}: temp_raw
 ' Read temperature data
 '   Returns: Raw temperature word, s16 (sign-extended)
     return ~~_last_temp
 
-PUB Temperature{}: temp
+PUB temperature{}: temp
 ' Temperature, in hundredths of a degree
     return calctemp(tempdata{})
 
-PUB TempScale(scale): curr_scl
+PUB tempscale(scale): curr_scl
 ' Set temperature scale used by Temperature method
 '   Valid values:
 '      *C (0): Celsius
@@ -372,7 +372,7 @@ PUB TempScale(scale): curr_scl
         other:
             return _temp_scale
 
-PRI calcTemp(temp_word): temp_cal
+PRI calctemp(temp_word): temp_cal
 ' Calculate temperature, using temperature word
 '   Returns: temperature, in hundredths of a degree, in chosen scale
     temp_cal := ((((temp_word & $FFFF) * 1_000) - 46244_000) / 45_2) + 25_00
@@ -430,7 +430,7 @@ PRI exit{}: status
 ' Exit mode
     status := command(core#EXIT_MODE, 0, 0, 0)
 
-PUB readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
+PUB readreg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
 ' Read nr_bytes from device
     status := 0
     case reg_nr
@@ -449,11 +449,11 @@ PUB readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp
         other:
             return
 
-PRI readStatus{}: status
+PRI readstatus{}: status
 ' Read status byte
     _status := status := command(core#NOOP, 0, 0, 0)
 
-PRI writeReg(reg_nr, nr_bytes, ptr_buff): status | tmp, cmd_pkt[2]
+PRI writereg(reg_nr, nr_bytes, ptr_buff): status | tmp, cmd_pkt[2]
 ' Write nr_bytes to device
     case reg_nr
         $00..$09:                               ' writable RAM reg locations

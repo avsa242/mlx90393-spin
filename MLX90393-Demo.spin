@@ -39,7 +39,7 @@ OBJ
     time    : "time"
     mag     : "sensor.magnetometer.3dof.mlx90393"
 
-PUB Main{}
+PUB main{}
 
     setup{}
     mag.preset_active{}                         ' default settings, but enable
@@ -63,7 +63,7 @@ PUB Main{}
 
     repeat
 
-PUB Setup{}
+PUB setup{}
 
     ser.start(SER_BAUD)
     time.msleep(30)
