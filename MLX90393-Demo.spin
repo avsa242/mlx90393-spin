@@ -3,9 +3,9 @@
     Filename: MLX90393-Demo.spin
     Author: Jesse Burt
     Description: Demo of the MLX90393 driver
-    Copyright (c) 2021
+    Copyright (c) 2022
     Started Aug 27, 2020
-    Updated Mar 14, 2021
+    Updated Oct 16, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -34,31 +34,31 @@ CON
 
 OBJ
 
-    cfg     : "core.con.boardcfg.flip"
+    cfg     : "boardcfg.flip"
     ser     : "com.serial.terminal.ansi"
     time    : "time"
-    mag     : "sensor.magnetometer.3dof.mlx90393"
+    sensor  : "sensor.magnetometer.3dof.mlx90393"
 
 PUB main{}
 
     setup{}
-    mag.preset_active{}                         ' default settings, but enable
+    sensor.preset_active{}                      ' default settings, but enable
                                                 ' sensor acquisition and set
                                                 ' scale factor
     case STANDARD
         GAUSS:
             repeat
                 ser.position(0, 3)
-                magdata{}
+                show_mag_data{}
 
-                if ser.rxcheck{} == "c"         ' press the 'c' key in the demo
+                if (ser.rxcheck{} == "c")     ' press the 'c' key in the demo
                     cal_mag{}                 ' to calibrate sensor offsets
         TESLA:
             repeat
                 ser.position(0, 3)
                 magtesla{}
 
-                if ser.rxcheck{} == "c"
+                if (ser.rxcheck{} == "c")
                     calibrate{}
 
     repeat
@@ -69,7 +69,7 @@ PUB setup{}
     time.msleep(30)
     ser.clear{}
     ser.strln(string("Serial terminal started"))
-    if mag.startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN)
+    if sensor.startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN)
         ser.strln(string("MLX90393 driver started"))
     else
         ser.strln(string("MLX90393 driver failed to start - halting"))

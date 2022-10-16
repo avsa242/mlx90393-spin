@@ -3,12 +3,14 @@
     Filename: sensor.magnetometer.3dof.mlx90393.spin
     Author: Jesse Burt
     Description: Driver for the Melexis MLX90393 3DoF magnetometer
-    Copyright (c) 2021
+    Copyright (c) 2022
     Started Aug 27, 2020
-    Updated Aug 11, 2021
+    Updated Oct 16, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
+#include "sensor.magnetometer.common.spinh"
+#include "sensor.temp.common.spinh"
 
 CON
 
@@ -28,21 +30,18 @@ CON
     BARO_DOF            = 0
     DOF                 = ACCEL_DOF + GYRO_DOF + MAG_DOF + BARO_DOF
 
+    CAL_M_SCL           = 0
+    CAL_M_DR            = 0
+
 ' Bias adjustment (AccelBias(), GyroBias(), MagBias()) read or write
-    R                       = 0
-    W                       = 1
+    R                   = 0
+    W                   = 1
 
 ' Axis-specific sensitivity settings
     SENS_XY_00          = 0_196
     SENS_Z_00           = 0_316
     SENS_XY_0C          = 0_150
     SENS_Z_0C           = 0_242
-
-' Measurement selection bits
-    Z                   = 3
-    Y                   = 2
-    X                   = 1
-    T                   = 0
 
 ' Measurement modes
     SINGLE              = 0
@@ -60,13 +59,10 @@ CON
 
 VAR
 
-    long _last_temp
-    long _mres[3]
     word _adcoffset
     byte _INT_PIN
     byte _axes_enabled
     byte _status
-    byte _temp_scale
 
 OBJ
 
@@ -109,24 +105,16 @@ PUB preset_active{}
 ' Like defaults, but
 '   * enables sensor acquisition
     reset{}
-    magopmode(CONT)
-    magscale(7)
-    tempscale(C)
+    mag_opmode(CONT)
+    mag_scale(7)
+    temp_scale(C)
 
-PUB calibratemag{}
-' TODO
-
-PUB lasttemp{}
-' Last temperature reading
-'   Returns: Raw temperature word, s16
-    return ~~_last_temp
-
-PUB magadcres(adcres): curr_res | opmode_orig
+PUB mag_adc_res(adcres): curr_res | opmode_orig
 ' Set magnetometer ADC resolution, in bits
 '   Valid values: 16..19
 '   Any other value polls the chip and returns the current setting
-    opmode_orig := magopmode(-2)                ' store user op. mode
-    magopmode(IDLE)                             ' must be in idle to read regs
+    opmode_orig := mag_opmode(-2)                ' store user op. mode
+    mag_opmode(IDLE)                             ' must be in idle to read regs
     curr_res := 0
     readreg(core#CFG2, 2, @curr_res)
     case adcres
@@ -137,15 +125,15 @@ PUB magadcres(adcres): curr_res | opmode_orig
             adcres := (adcres << core#RES_X) | (adcres << core#RES_Y) |{
 }           (adcres << core#RES_Z)              ' set all three axes the same
         other:
-            magopmode(opmode_orig)              ' restore user op. mode
+            mag_opmode(opmode_orig)              ' restore user op. mode
             curr_res := ((curr_res >> core#RES_X) & core#RES_X_BITS)
             return lookupz(curr_res: 16, 17, 18, 19)
 
     adcres := ((curr_res & core#RES_MASK) | adcres) & core#CFG2_MASK
     writereg(core#CFG2, 2, @adcres)
-    magopmode(opmode_orig)
+    mag_opmode(opmode_orig)
 
-PUB magaxisenabled(xyz_mask): curr_mask 'TODO
+PUB mag_axis_ena(xyz_mask): curr_mask 'TODO
 ' Enable magnetometer axis per bitmask
 '   Valid values:
 '       Bits %210 (xyz):
@@ -160,48 +148,38 @@ PUB magaxisenabled(xyz_mask): curr_mask 'TODO
         other:
             return
 
-PUB magbias(ptr_x, ptr_y, ptr_z, rw) | tmp[2], opmode_orig
-' Read or write/manually set Magnetometer calibration offset values
-'   Valid values:
-'       rw:
-'           R (0), W (1)
-'       ptr_x, ptr_y, ptr_z:
-'           -32768..32767
-'   NOTE: When rw is set to READ, ptr_x, ptr_y and ptr_z must be addresses
-'       of respective variables to hold the returned calibration offset values
-    opmode_orig := magopmode(-2)                ' store user's opmode
-    magopmode(IDLE)                             ' switch to idle to read/write
-    case rw
-        R:
-            readreg(core#OFFSET_X, 2, @tmp)     ' read the current offsets
-            readreg(core#OFFSET_Y, 2, @tmp.byte[2])
-            readreg(core#OFFSET_Z, 2, @tmp.byte[4])
-            ' offsets are centered around 32768
-            long[ptr_x] := tmp.word[X_AXIS]-32768
-            long[ptr_y] := tmp.word[Y_AXIS]-32768
-            long[ptr_z] := tmp.word[Z_AXIS]-32768
-        W:
-            case ptr_x
-                -32768..32767:
-                other:
-                    return
-            case ptr_y
-                -32768..32767:
-                other:
-                    return
-            case ptr_z
-                -32768..32767:
-                other:
-                    return
-            ptr_x += 32768
-            ptr_y += 32768
-            ptr_z += 32768
-            writereg(core#OFFSET_X, 2, @ptr_x)
-            writereg(core#OFFSET_Y, 2, @ptr_y)
-            writereg(core#OFFSET_Z, 2, @ptr_z)
-    magopmode(opmode_orig)                      ' restore user op. mode
+PUB mag_bias(x, y, z) | tmp[2], opmode_orig
+' Read magnetometer calibration offset values
+'   x, y, z: pointers to copy offsets to
+    opmode_orig := mag_opmode(-2)               ' store user's opmode
+    mag_opmode(IDLE)                            ' switch to idle to read/write
 
-PUB magdata(ptr_x, ptr_y, ptr_z): status | tmp[2]
+    readreg(core#OFFSET_X, 2, @tmp)             ' read the current offsets
+    readreg(core#OFFSET_Y, 2, @tmp.byte[2])
+    readreg(core#OFFSET_Z, 2, @tmp.byte[4])
+    long[x] := tmp.word[X_AXIS]-32768           ' offsets are centered around 32768
+    long[y] := tmp.word[Y_AXIS]-32768
+    long[z] := tmp.word[Z_AXIS]-32768
+
+    mag_opmode(opmode_orig)                      ' restore user opmode
+
+PUB mag_set_bias(x, y, z) | opmode_orig
+' Write magnetometer calibration offset values
+'   Valid values:
+'       -32768..32767 (clamped to range)
+    opmode_orig := mag_opmode(-2)                ' store user's opmode
+    mag_opmode(IDLE)                             ' switch to idle to read/write
+
+    x := ((-32768 #> x <# 32767) + 32768)
+    y := ((-32768 #> y <# 32767) + 32768)
+    z := ((-32768 #> z <# 32767) + 32768)
+    writereg(core#OFFSET_X, 2, @x)
+    writereg(core#OFFSET_Y, 2, @y)
+    writereg(core#OFFSET_Z, 2, @z)
+
+    mag_opmode(opmode_orig)                      ' restore user opmode
+
+PUB mag_data(ptr_x, ptr_y, ptr_z): status | tmp[2]
 ' Read magnetometer data
 '   NOTE: For efficiency, the temperature data is read in as well,
 '       and stored in a hub variable
@@ -213,13 +191,13 @@ PUB magdata(ptr_x, ptr_y, ptr_z): status | tmp[2]
     long[ptr_z] := ~~tmp.word[0] - _adcoffset
     _last_temp := tmp.word[3]                   ' Read in the temp, too
 
-PUB magdatarate(rate): curr_rate | opmode_orig
+PUB mag_data_rate(rate): curr_rate | opmode_orig
 ' Set magnetometer data rate, in Hz
 '   Valid values: 0..50, *876
 '   Any other value polls the chip and returns the current setting
 '   NOTE: Values 0..50 are approximated
-    opmode_orig := magopmode(-2)                ' store user op. mode
-    magopmode(IDLE)                             ' must be in idle to read regs
+    opmode_orig := mag_opmode(-2)                ' store user op. mode
+    mag_opmode(IDLE)                             ' must be in idle to read regs
     curr_rate := 0
     readreg(core#CFG1, 2, @curr_rate)
     case rate
@@ -228,7 +206,7 @@ PUB magdatarate(rate): curr_rate | opmode_orig
         0:                                      ' ~0.8Hz
             rate := 63
         other:
-            magopmode(opmode_orig)              ' restore user op. mode
+            mag_opmode(opmode_orig)              ' restore user op. mode
             curr_rate &= core#BURST_DRATE_BITS
             case curr_rate
                 0:
@@ -238,25 +216,14 @@ PUB magdatarate(rate): curr_rate | opmode_orig
 
     rate := ((curr_rate & core#BURST_DRATE_MASK) | rate) & core#CFG1_MASK
     writereg(core#CFG1, 2, @rate)
-    magopmode(opmode_orig)                      ' restore user op. mode
+    mag_opmode(opmode_orig)                      ' restore user op. mode
 
-PUB magdataready{}: flag
+PUB mag_data_rdy{}: flag
 ' Flag indicating magnetometer data is ready
 '   Returns: TRUE (-1) if data ready, FALSE (0) otherwise
-    return ina[_INT_PIN] == 1
+    return (ina[_INT_PIN] == 1)
 
-PUB maggauss(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
-' Read magnetometer data, in hundred-thousandths of a Gauss
-'   e.g., 50_228 = 0.50228Gs
-    magdata(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
-
-    tmp[X_AXIS] *= _mres[X_AXIS]
-    tmp[Y_AXIS] *= _mres[Y_AXIS]
-    tmp[Z_AXIS] *= _mres[Z_AXIS]
-
-    longmove(ptr_x, @tmp, MAG_DOF)              ' copy local vars to pointers
-
-PUB magopmode(mode): curr_mode
+PUB mag_opmode(mode): curr_mode
 ' Set magnetometer operating mode
 '   Valid values:
 '       SINGLE (0): Single-shot measurement
@@ -280,17 +247,17 @@ PUB magopmode(mode): curr_mode
         other:
             return curr_mode
 
-PUB magscale(scale): curr_scl | opmode_orig, adcres, axis
+PUB mag_scale(scale): curr_scl | opmode_orig, adcres, axis
 ' Set magnetometer full-scale range 'XXX units
 '   Valid values: TBD
 '   Any other value polls the chip and returns the current setting
-    opmode_orig := magopmode(-2)                ' store user's opmode
-    magopmode(IDLE)                             ' switch to idle to read/write
+    opmode_orig := mag_opmode(-2)                ' store user's opmode
+    mag_opmode(IDLE)                             ' switch to idle to read/write
     curr_scl := 0
     readreg(core#CFG0, 2, @curr_scl)
     case scale
         0..7:
-            adcres := 1 << (magadcres(-2)-16)   ' map 16..19bits to 0..3
+            adcres := 1 << (mag_adc_res(-2)-16)   ' map 16..19bits to 0..3
             repeat axis from X_AXIS to Y_AXIS
                 _mres[axis] := lookupz(scale: 0_751, 0_601, 0_451, {
 }               0_376, 0_300, 0_250, 0_200, 0_150)
@@ -302,25 +269,14 @@ PUB magscale(scale): curr_scl | opmode_orig, adcres, axis
             _mres[Z_AXIS] := (_mres[Z_AXIS] * SENS_Z_0C * adcres) / 1000
             scale <<= core#GAIN_SEL
         other:
-            magopmode(opmode_orig)              ' restore user's opmode
+            mag_opmode(opmode_orig)              ' restore user's opmode
             return ((curr_scl >> core#GAIN_SEL) & core#GAIN_SEL_BITS)
 
     scale := ((curr_scl & core#GAIN_SEL_MASK) | scale) & core#CFG0_MASK
     writereg(core#CFG0, 2, @scale)
-    magopmode(opmode_orig)
+    mag_opmode(opmode_orig)
 
-PUB magtesla(ptr_x, ptr_y, ptr_z) | tmp[MAG_DOF]
-' Read magnetometer data, in hundred-thousandths of a micro-Tesla
-'   e.g., 50_228 = 50.228uT
-    maggauss(@tmp[X_AXIS], @tmp[Y_AXIS], @tmp[Z_AXIS])
-
-    tmp[X_AXIS] *= 100
-    tmp[Y_AXIS] *= 100
-    tmp[Z_AXIS] *= 100
-
-    longmove(ptr_x, @tmp, MAG_DOF)              ' copy local vars to pointers
-
-PUB measuremag{}: status
+PUB measure_mag{}: status
 ' Perform a measurement
 '   NOTE: This method only applies to single-shot measurement mode
 '       and will stop continuous measurement mode, if called
@@ -333,12 +289,12 @@ PUB reset{}: status
     command(core#RESET, 0, 0, 0)
     time.usleep(core#TPOR)
 
-PUB tempcompensation(state): curr_state | opmode_orig
+PUB temp_comp_ena(state): curr_state | opmode_orig
 ' Enable on-chip temperature compensation for magnetometer readings
 '   Valid values: TRUE (-1 or 1) or FALSE
 '   Any other value polls the chip and returns the current setting
-    opmode_orig := magopmode(-2)                ' store user op. mode
-    magopmode(IDLE)                             ' must be in idle to read regs
+    opmode_orig := mag_opmode(-2)                ' store user op. mode
+    mag_opmode(IDLE)                             ' must be in idle to read regs
     curr_state := 0
     readreg(core#CFG1, 1, @curr_state)
     case ||(state)
@@ -349,30 +305,14 @@ PUB tempcompensation(state): curr_state | opmode_orig
 
     state := ((curr_state & core#TCMP_EN_MASK) | state)
     writereg(core#CFG1, 1, @state)
-    magopmode(opmode_orig)                      ' restore user's opmode
+    mag_opmode(opmode_orig)                      ' restore user's opmode
 
-PUB tempdata{}: temp_raw
+PUB temp_data{}: temp_raw
 ' Read temperature data
 '   Returns: Raw temperature word, s16 (sign-extended)
     return ~~_last_temp
 
-PUB temperature{}: temp
-' Temperature, in hundredths of a degree
-    return calctemp(tempdata{})
-
-PUB tempscale(scale): curr_scl
-' Set temperature scale used by Temperature method
-'   Valid values:
-'      *C (0): Celsius
-'       F (1): Fahrenheit
-'   Any other value returns the current setting
-    case scale
-        C, F:
-            _temp_scale := scale
-        other:
-            return _temp_scale
-
-PRI calctemp(temp_word): temp_cal
+PUB temp_word2deg(temp_word): temp_cal
 ' Calculate temperature, using temperature word
 '   Returns: temperature, in hundredths of a degree, in chosen scale
     temp_cal := ((((temp_word & $FFFF) * 1_000) - 46244_000) / 45_2) + 25_00
@@ -399,7 +339,7 @@ PRI command(cmd, arg, nr_rdbytes, ptr_buff): status | cmd_pkt, tmp
             _status := status := i2c.read(i2c#ACK)
 
 ' How many bytes are ready to read? Make sure it matches what's requested:
-            if nr_rdbytes == (2 * (status & core#D_BITS) + 2)
+            if (nr_rdbytes == (2 * (status & core#D_BITS) + 2))
                 i2c.rdblock_msbf(ptr_buff, nr_rdbytes, i2c#NAK)
                 i2c.stop{}
             else
