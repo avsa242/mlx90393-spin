@@ -5,7 +5,7 @@
     Description: Driver for the Melexis MLX90393 3DoF magnetometer
     Copyright (c) 2022
     Started Aug 27, 2020
-    Updated Oct 16, 2022
+    Updated Nov 23, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -32,10 +32,6 @@ CON
 
     CAL_M_SCL           = 0
     CAL_M_DR            = 0
-
-' Bias adjustment (AccelBias(), GyroBias(), MagBias()) read or write
-    R                   = 0
-    W                   = 1
 
 ' Axis-specific sensitivity settings
     SENS_XY_00          = 0_196
@@ -119,13 +115,13 @@ PUB mag_adc_res(adcres): curr_res | opmode_orig
     readreg(core#CFG2, 2, @curr_res)
     case adcres
         16..19:
-            ' map adcres (bits) 16, 17, 18, 19 to register vals 0, 1, 2, 3
+            { map adc res (bits) 16, 17, 18, 19 to register vals 0, 1, 2, 3 }
             adcres := lookdownz(adcres: 16, 17, 18, 19)
             _adcoffset := lookupz(adcres: 0, 0, 32768, 16384)
-            adcres := (adcres << core#RES_X) | (adcres << core#RES_Y) |{
-}           (adcres << core#RES_Z)              ' set all three axes the same
+            adcres := (adcres << core#RES_X) | (adcres << core#RES_Y) | {
+}                     (adcres << core#RES_Z)    ' set all three axes the same
         other:
-            mag_opmode(opmode_orig)              ' restore user op. mode
+            mag_opmode(opmode_orig)             ' restore user op. mode
             curr_res := ((curr_res >> core#RES_X) & core#RES_X_BITS)
             return lookupz(curr_res: 16, 17, 18, 19)
 
@@ -259,13 +255,12 @@ PUB mag_scale(scale): curr_scl | opmode_orig, adcres, axis
         0..7:
             adcres := 1 << (mag_adc_res(-2)-16)   ' map 16..19bits to 0..3
             repeat axis from X_AXIS to Y_AXIS
-                _mres[axis] := lookupz(scale: 0_751, 0_601, 0_451, {
-}               0_376, 0_300, 0_250, 0_200, 0_150)
+                _mres[axis] := lookupz(scale: 0_751, 0_601, 0_451, 0_376, 0_300, 0_250, 0_200, {
+}                                             0_150)
                 _mres[axis] := (_mres[axis] * SENS_XY_0C * adcres) / 1000
 
             ' Z-axis sensitivity is different from X and Y:
-            _mres[Z_AXIS] := lookupz(scale: 1_210, 0_968, 0_726, {
-}           0_605, 0_484, 0_403, 0_323, 0_242)
+            _mres[Z_AXIS] := lookupz(scale: 1_210, 0_968, 0_726, 0_605, 0_484, 0_403, 0_323, 0_242)
             _mres[Z_AXIS] := (_mres[Z_AXIS] * SENS_Z_0C * adcres) / 1000
             scale <<= core#GAIN_SEL
         other:

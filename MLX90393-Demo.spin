@@ -5,7 +5,7 @@
     Description: Demo of the MLX90393 driver
     Copyright (c) 2022
     Started Aug 27, 2020
-    Updated Oct 16, 2022
+    Updated Nov 23, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -18,12 +18,10 @@ CON
     LED         = cfg#LED1
     SER_BAUD    = 115_200
 
-    SCL_PIN     = 13
-    SDA_PIN     = 14
+    SCL_PIN     = 28
+    SDA_PIN     = 29
     I2C_HZ      = 400_000                       ' max is 400_000
     INT_PIN     = 15                            ' required (data ready flag)
-
-    STANDARD    = GAUSS                         ' GAUSS or TESLA
 ' --
 
     DAT_X_COL   = 20
@@ -41,30 +39,6 @@ OBJ
 
 PUB main{}
 
-    setup{}
-    sensor.preset_active{}                      ' default settings, but enable
-                                                ' sensor acquisition and set
-                                                ' scale factor
-    case STANDARD
-        GAUSS:
-            repeat
-                ser.position(0, 3)
-                show_mag_data{}
-
-                if (ser.rxcheck{} == "c")     ' press the 'c' key in the demo
-                    cal_mag{}                 ' to calibrate sensor offsets
-        TESLA:
-            repeat
-                ser.position(0, 3)
-                magtesla{}
-
-                if (ser.rxcheck{} == "c")
-                    calibrate{}
-
-    repeat
-
-PUB setup{}
-
     ser.start(SER_BAUD)
     time.msleep(30)
     ser.clear{}
@@ -74,6 +48,16 @@ PUB setup{}
     else
         ser.strln(string("MLX90393 driver failed to start - halting"))
         repeat
+
+    sensor.preset_active{}                      ' default settings, but enable sensor acquisition
+                                                ' and set scale factor
+
+    repeat
+        ser.pos_xy(0, 3)
+        show_mag_data{}
+
+        if (ser.rx_check{} == "c")              ' press the 'c' key in the demo
+            cal_mag{}                           ' to calibrate sensor offsets
 
 #include "magdemo.common.spinh"
 
