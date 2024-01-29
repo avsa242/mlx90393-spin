@@ -35,7 +35,7 @@ OBJ
     cfg     : "boardcfg.flip"
     ser     : "com.serial.terminal.ansi"
     time    : "time"
-    sensor  : "input.encoder.magnetic.mlx90393"
+    sensor  : "input.encoder.mlx90393"
 
 PUB main{}
 
