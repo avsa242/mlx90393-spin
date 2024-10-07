@@ -1,13 +1,12 @@
 {
-    --------------------------------------------
-    Filename: core.con.mlx90393.spin
-    Author: Jesse Burt
-    Description: MLX90393-specific constants
-    Copyright (c) 2020
-    Started Aug 27, 2020
-    Updated Nov 16, 2020
-    See end of file for terms of use.
-    --------------------------------------------
+----------------------------------------------------------------------------------------------------
+    Filename:       core.con.mlx90393.spin
+    Description:    MLX90393-specific constants
+    Author:         Jesse Burt
+    Started:        Aug 27, 2020
+    Updated:        Oct 7, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+----------------------------------------------------------------------------------------------------
 }
 
 CON
@@ -124,12 +123,13 @@ CON
     FREE_END            = $1F
 
 
-PUB null{}
+PUB null()
 ' This is not a top-level object
+
 
 DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

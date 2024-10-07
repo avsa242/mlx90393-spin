@@ -1,69 +1,79 @@
 {
-    --------------------------------------------
-    Filename: MLX90393-Demo.spin
-    Author: Jesse Burt
-    Description: Demo of the MLX90393 driver
-    Copyright (c) 2022
-    Started Aug 27, 2020
-    Updated Nov 23, 2022
-    See end of file for terms of use.
-    --------------------------------------------
+----------------------------------------------------------------------------------------------------
+    Filename:       MLX90393-Demo.spin
+    Description:    Demo of the MLX90393 driver
+    Author:         Jesse Burt
+    Started:        Aug 27, 2020
+    Updated:        Oct 7, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+----------------------------------------------------------------------------------------------------
 }
+
 CON
 
-    _clkmode    = cfg#_clkmode
-    _xinfreq    = cfg#_xinfreq
+    _clkmode    = xtal1+pll16x
+    _xinfreq    = 5_000_000
 
-' -- User-modifiable constants
-    LED         = cfg#LED1
-    SER_BAUD    = 115_200
-
-    SCL_PIN     = 28
-    SDA_PIN     = 29
-    I2C_HZ      = 400_000                       ' max is 400_000
-    INT_PIN     = 15                            ' required (data ready flag)
-' --
-
-    DAT_X_COL   = 20
-    DAT_Y_COL   = DAT_X_COL + 15
-    DAT_Z_COL   = DAT_Y_COL + 15
-    GAUSS       = 0
-    TESLA       = 1
 
 OBJ
 
-    cfg     : "boardcfg.flip"
-    ser     : "com.serial.terminal.ansi"
-    time    : "time"
-    sensor  : "input.encoder.mlx90393"
+    time:   "time"
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
+    sensor: "input.encoder.mlx90393" | INT=27, SCL=28, SDA=29, I2C_FREQ=100_000
 
-PUB main{}
 
-    ser.start(SER_BAUD)
-    time.msleep(30)
-    ser.clear{}
-    ser.strln(string("Serial terminal started"))
-    if sensor.startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN)
-        ser.strln(string("MLX90393 driver started"))
-    else
-        ser.strln(string("MLX90393 driver failed to start - halting"))
-        repeat
+PUB main() | m[sensor.MAG_DOF], sign, axis
 
-    sensor.preset_active{}                      ' default settings, but enable sensor acquisition
-                                                ' and set scale factor
+    setup()
 
     repeat
         ser.pos_xy(0, 3)
-        show_mag_data{}
+        repeat until sensor.mag_data_rdy()
+        sensor.mag_gauss(@m[sensor.X_AXIS], @m[sensor.Y_AXIS], @m[sensor.Z_AXIS])
+        ser.str(@"Mag (Gs):  ")
+        repeat axis from sensor.X_AXIS to sensor.Z_AXIS
+            if ( m[axis] < 0 )
+                sign := "-"
+            else
+                sign := " "
+            ser.printf3(@"%c%d.%06.6d     ",    sign, ...
+                                                ||(m[axis] / 1_000_000), ...
+                                                ||(m[axis] // 1_000_000) )
+        ser.newline()
 
-        if (ser.rx_check{} == "c")              ' press the 'c' key in the demo
-            cal_mag{}                           ' to calibrate sensor offsets
+        if ( ser.getchar_noblock == "c" )       ' press the 'c' key in the demo
+            cal_mag()                           ' to calibrate sensor offsets
 
-#include "magdemo.common.spinh"
+
+PUB cal_mag()
+' Calibrate the magnetometer
+    ser.pos_xy(0, 5)
+    ser.str(@"Calibrating magnetometer...")
+    sensor.calibrate_mag()
+    ser.pos_xy(0, 5)
+    ser.clear_ln()
+
+
+PUB setup()
+
+    ser.start()
+    time.msleep(30)
+    ser.clear()
+    ser.strln(@"Serial terminal started")
+
+    if ( sensor.start() )
+        ser.strln(@"MLX90393 driver started")
+    else
+        ser.strln(@"MLX90393 driver failed to start - halting")
+        repeat
+
+    sensor.preset_active()                      ' default settings, but enable sensor acquisition
+                                                ' and set scale factor
+
 
 DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
