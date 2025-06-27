@@ -19,7 +19,7 @@ OBJ
 
     time:   "time"
     ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
-    sensor: "input.encoder.mlx90393" | INT=27, SCL=28, SDA=29, I2C_FREQ=100_000
+    sensor: "input.encoder.mlx90393" | INT=25, SCL=28, SDA=29, I2C_FREQ=100_000
 
 
 PUB main() | m[sensor.MAG_DOF], sign, axis
@@ -36,9 +36,9 @@ PUB main() | m[sensor.MAG_DOF], sign, axis
                 sign := "-"
             else
                 sign := " "
-            ser.printf3(@"%c%d.%06.6d     ",    sign, ...
-                                                ||(m[axis] / 1_000_000), ...
-                                                ||(m[axis] // 1_000_000) )
+            ser.printf(@"%c%d.%06.6d     ", sign, ...
+                                            abs(m[axis] / 1_000_000), ...
+                                            abs(m[axis] // 1_000_000) )
         ser.newline()
 
         if ( ser.getchar_noblock == "c" )       ' press the 'c' key in the demo
@@ -73,7 +73,7 @@ PUB setup()
 
 DAT
 {
-Copyright 2024 Jesse Burt
+Copyright 2025 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

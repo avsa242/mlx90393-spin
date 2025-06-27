@@ -49,6 +49,7 @@ CON
 
 
 ' RAM registers
+'   (pre-shift these left by 2 for readreg() and writereg() )
     CFG0                = $00
     CFG0_MASK           = $01FF
         BIST            = 8
@@ -62,7 +63,7 @@ CON
         GAIN_SEL_MASK   = (GAIN_SEL_BITS << GAIN_SEL) ^ CFG0_MASK
         HALLCONF_MASK   = (HALLCONF_BITS << HALLCONF) ^ CFG0_MASK
 
-    CFG1                = $01
+    CFG1                = $01 << 2
     CFG1_MASK           = $FFFF
         TRIG_INT        = 15
         COMM_MODE       = 13
@@ -86,7 +87,7 @@ CON
         BURSTSEL_ZYXMASK= (BURSTSEL_ZYXBITS << BURST_SEL_ZYX) ^ CFG1_MASK
         BURST_DRATE_MASK= BURST_DRATE_BITS ^ CFG1_MASK
 
-    CFG2                = $02
+    CFG2                = $02 << 2
     CFG2_MASK           = $1FFF
         OSR2            = 11
         RES_Z           = 9
@@ -109,18 +110,18 @@ CON
         DIG_FILT_MASK   = (DIG_FILT_BITS << DIG_FILT) ^ CFG2_MASK
         OSR_MASK        = (OSR_BITS << OSR) ^ CFG2_MASK
 
-    SENS_TC             = $03   ' SENS_TC_LT:SENS_TC_HT
+    SENS_TC             = $03 << 2              ' SENS_TC_LT:SENS_TC_HT
 
-    OFFSET_X            = $04
-    OFFSET_Y            = $05
-    OFFSET_Z            = $06
+    OFFSET_X            = $04 << 2
+    OFFSET_Y            = $05 << 2
+    OFFSET_Z            = $06 << 2
 
-    WOXY_THRESHOLD      = $07
-    WOZ_THRESHOLD       = $08
-    WOT_THRESHOLD       = $09
+    WOXY_THRESHOLD      = $07 << 2
+    WOZ_THRESHOLD       = $08 << 2
+    WOT_THRESHOLD       = $09 << 2
 
-    FREE_START          = $0A
-    FREE_END            = $1F
+    FREE_START          = $0A << 2
+    FREE_END            = $1F << 2
 
 
 PUB null()
