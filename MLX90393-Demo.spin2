@@ -1,9 +1,9 @@
 {
 ----------------------------------------------------------------------------------------------------
-    Filename:       MLX90393-Demo.spin
+    Filename:       MLX90393-Demo.spin2
     Description:    Demo of the MLX90393 driver
     Author:         Jesse Burt
-    Started:        Aug 27, 2020
+    Started:        Jul 21, 2026
     Updated:        Jul 21, 2026
     Copyright (c) 2026 - See end of file for terms of use.
 ----------------------------------------------------------------------------------------------------
@@ -11,15 +11,14 @@
 
 CON
 
-    _clkmode    = xtal1+pll16x
-    _xinfreq    = 5_000_000
+    _clkfreq    = 180_000_000
+    _xtlfreq    = 20_000_000
 
 
 OBJ
 
-    time:   "time"
-    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
-    sensor: "input.encoder.mlx90393" | INT=25, SCL=28, SDA=29, I2C_FREQ=100_000
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=2_000_000
+    sensor: "input.encoder.mlx90393" | INT=2, SCL=0, SDA=1, I2C_FREQ=100_000
 
 
 PUB main() | m[sensor.MAG_DOF], sign, axis
@@ -57,7 +56,7 @@ PUB cal_mag()
 PUB setup()
 
     ser.start()
-    time.msleep(30)
+    waitms(30)
     ser.clear()
     ser.strln(@"Serial terminal started")
 

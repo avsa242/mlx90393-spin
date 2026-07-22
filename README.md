@@ -22,16 +22,18 @@ P1/SPIN1:
 
 P2/SPIN2:
 * p2-spin-standard-library
+* `sensor.magnetometer.common.spin2h` (source: p2-spin-standard-library)
+* `sensor.temp.common.spin2h` (source: p2-spin-standard-library)
 
 
 ## Compiler Compatibility
 
 | Processor | Language | Compiler               | Backend      | Status                |
 |-----------|----------|------------------------|--------------|-----------------------|
-| P1        | SPIN1    | FlexSpin (6.9.4)       | Bytecode     | OK                    |
-| P1        | SPIN1    | FlexSpin (6.9.4)       | Native/PASM  | OK                    |
-| P2        | SPIN2    | FlexSpin (6.9.4)       | NuCode       | Not yet implemented   |
-| P2        | SPIN2    | FlexSpin (6.9.4)       | Native/PASM2 | Not yet implemented   |
+| P1        | SPIN1    | FlexSpin (7.7.0)       | Bytecode     | OK                    |
+| P1        | SPIN1    | FlexSpin (7.7.0)       | Native/PASM  | OK                    |
+| P2        | SPIN2    | FlexSpin (7.7.0)       | NuCode       | Runtime issues        |
+| P2        | SPIN2    | FlexSpin (7.7.0)       | Native/PASM2 | OK                    |
 
 (other versions or toolchains not listed are __not supported__, and _may or may not_ work)
 

@@ -1,0 +1,472 @@
+{
+----------------------------------------------------------------------------------------------------
+    Filename:       input.encoder.mlx90393.spin2
+    Description:    Driver for the Melexis MLX90393 Triaxis(R) magnetic node
+    Author:         Jesse Burt
+    Started:        Jul 21, 2026
+    Updated:        Jul 21, 2026
+    Copyright (c) 2026 - See end of file for terms of use.
+----------------------------------------------------------------------------------------------------
+}
+
+#include "sensor.magnetometer.common.spin2h"    ' use code common to all magnetometers
+#include "sensor.temp.common.spin2h"            '   and temperature sensors
+
+CON
+
+    { default I/O settings; these can be overridden in the parent object }
+    { I2C }
+    SCL         = 0
+    SDA         = 1
+    I2C_FREQ    = 100_000
+    I2C_ADDR    = 0
+
+    { SPI }
+    CS          = 0
+    SCK         = 1
+    MOSI        = 2
+    MISO        = 3
+
+    { common to both interfaces }
+    INT         = 2
+    TRIG        = 5
+
+
+    SLAVE_WR    = core.SLAVE_ADDR
+    SLAVE_RD    = core.SLAVE_ADDR|1
+
+    I2C_MAX_FREQ= core.I2C_MAX_FREQ
+
+' Indicate to user apps how many Degrees of Freedom each sub-sensor has
+'   (also imply whether or not it has a particular sensor)
+    ACCEL_DOF   = 0
+    GYRO_DOF    = 0
+    MAG_DOF     = 3
+    BARO_DOF    = 0
+    DOF         = ACCEL_DOF + GYRO_DOF + MAG_DOF + BARO_DOF
+
+    CAL_M_SCL   = 0
+    CAL_M_DR    = 50
+
+' Axis-specific sensitivity settings
+    SENS_XY_00  = 0_196
+    SENS_Z_00   = 0_316
+    SENS_XY_0C  = 0_150
+    SENS_Z_0C   = 0_242
+
+' Measurement modes
+    SINGLE      = 0
+    IDLE        = 0                     ' alias for SINGLE
+    WOC         = 2
+    CONT        = 4
+
+    X_AXIS      = 0
+    Y_AXIS      = 1
+    Z_AXIS      = 2
+
+' Temperature scales
+    C           = 0
+    F           = 1
+
+
+VAR
+
+    word _adcoffset
+    byte _INT_PIN
+    byte _axes_enabled
+    byte _status
+
+
+OBJ
+
+    i2c:    "com.i2c"                           ' PASM I2C engine
+    core:   "core.con.mlx90393"                 ' HW-specific constants
+
+
+PUB null()
+' This is not a top-level object
+
+
+PUB start(): status
+' Start using default I/O settings
+    return startx(SCL, SDA, I2C_FREQ, INT)
+
+
+PUB startx(SCL_PIN, SDA_PIN, I2C_HZ, INT_PIN): status
+' Start the driver with custom I/O settings
+'   SCL_PIN:    I2C clock, 0..63
+'   SDA_PIN:    I2C data, 0..63
+'   I2C_HZ:     I2C clock speed (max official specification is 400_000 but is unenforced)
+'   INT_PIN:    interrupt/data ready pin
+'       (NOTE: use of mag_data_rdy() requires this to be valid)
+'   Returns:
+'       cog ID+1 of I2C engine on success (= calling cog ID+1, if the bytecode I2C engine is used)
+'       0 on failure
+    if ( lookdown(SCL_PIN: 0..63) and lookdown(SDA_PIN: 0..63) )
+        if ( status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ) )
+            waitus(core.TPOR)                   ' wait for device to be ready
+            if ( lookdown(INT_PIN: 0..63) )     ' Valid INT_PIN?
+                _INT_PIN := INT_PIN             ' Copy it to hub var
+                pinf(_INT_PIN)
+            if ( i2c.present(SLAVE_WR) )        ' test device bus presencxe
+                return
+    ' if this point is reached, something above failed
+    ' Double check I/O pin assignments, connections, power
+    ' Lastly - make sure you have at least one free core/cog
+    return FALSE
+
+
+PUB stop()
+' Stop the driver
+    i2c.deinit()
+
+
+PUB defaults()
+' Set factory defaults
+    reset()
+
+
+PUB preset_active()
+' Like defaults, but
+'   * enables sensor acquisition
+    reset()
+    mag_opmode(CONT)
+    mag_scale(7)
+    temp_scale(C)
+
+
+PUB mag_adc_res(r=-2): cr | opmode_orig
+' Set magnetometer ADC resolution, in bits
+'   Valid values: 16..19
+'   Any other value polls the chip and returns the current setting
+    opmode_orig := mag_opmode()                 ' store user op. mode
+    mag_opmode(IDLE)                            ' must be in idle to read regs
+    cr := readreg(core.CFG2)
+    case r
+        16..19:
+            { map adc res (bits) 16, 17, 18, 19 to register vals 0, 1, 2, 3 }
+            r := lookdownz(r: 16, 17, 18, 19)
+            _adcoffset := lookupz(r: 0, 0, 32768, 16384)
+            r :=    (r << core.RES_X) | ...
+                    (r << core.RES_Y) | ...
+                    (r << core.RES_Z)           ' set all three axes the same
+            r := ( (cr & core.RES_MASK) | r)
+            writereg(core.CFG2, r)
+            mag_opmode(opmode_orig)
+        other:
+            mag_opmode(opmode_orig)             ' restore user op. mode
+            cr := ((cr >> core.RES_X) & core.RES_X_BITS)
+            return lookupz(cr: 16, 17, 18, 19)
+
+
+PUB mag_axis_ena(m): cm 'TODO
+' Enable magnetometer axes
+'   m:  bitmask (b2..0: xyz)
+'       0: Disable axis
+'       1: Enable axis
+    cm := _axes_enabled
+    case m & %111
+        %000..%111:                             ' LSB is temp sensor
+            m rev= 3                            ' rev; order in reg is %zyx
+            _axes_enabled &= %0001
+            _axes_enabled |= (m << 1)
+        other:
+            return _axes_enabled
+
+
+PUB mag_bias(x, y, z) | tmpx, tmpy, tmpz, opmode_orig
+' Read magnetometer calibration offset values
+'   x, y, z: pointers to copy offsets to
+    opmode_orig := mag_opmode()                 ' store user's opmode
+    mag_opmode(IDLE)                            ' switch to idle to read/write
+
+    tmpx := readreg(core.OFFSET_X)              ' read the current offsets
+    tmpy := readreg(core.OFFSET_Y)
+    tmpz := readreg(core.OFFSET_Z)
+    long[x] := tmpx-32768                       ' offsets are centered around 32768
+    long[y] := tmpy-32768
+    long[z] := tmpz-32768
+
+    mag_opmode(opmode_orig)                     ' restore user opmode
+
+
+PUB mag_set_bias(x, y, z) | opmode_orig
+' Write magnetometer calibration offset values
+'   Valid values:
+'       -32768..32767 (clamped to range)
+    opmode_orig := mag_opmode()                 ' store user's opmode
+    mag_opmode(IDLE)                            ' switch to idle to read/write
+
+    x := ( (-32768 #> x <# 32767) + 32768)
+    y := ( (-32768 #> y <# 32767) + 32768)
+    z := ( (-32768 #> z <# 32767) + 32768)
+    writereg(core.OFFSET_X, x)
+    writereg(core.OFFSET_Y, y)
+    writereg(core.OFFSET_Z, z)
+
+    mag_opmode(opmode_orig)                     ' restore user opmode
+
+
+PUB mag_data(ptr_x, ptr_y, ptr_z): status | tmp[2]
+' Read magnetometer data
+'   NOTE: For efficiency, the temperature data is read in as well,
+'       and stored in a hub variable
+    status := command(core.READ_MEAS, core.ALL, 8, @tmp)
+    longfill(ptr_x, 0, 3)
+
+    long[ptr_x] := (tmp.word[2] signx 15) - _adcoffset
+    long[ptr_y] := (tmp.word[1] signx 15) - _adcoffset
+    long[ptr_z] := (tmp.word[0] signx 15) - _adcoffset
+    _last_temp := tmp.word[3]                   ' Read in the temp, too
+
+
+PUB mag_data_rate(r=-2): cr | opmode_orig
+' Set magnetometer data rate, in Hz
+'   Valid values: 0..50, *876
+'   Any other value polls the chip and returns the current setting
+'   NOTE: Values 0..50 are approximated
+    opmode_orig := mag_opmode()                 ' store user op. mode
+    mag_opmode(IDLE)                            ' must be in idle to read regs
+    cr := readreg(core.CFG1)
+    case r
+        1..50, 876:
+            r := 1000 / (r * 20)
+        0:                                      ' ~0.8Hz
+            r := 63
+        other:
+            mag_opmode(opmode_orig)             ' restore user op. mode
+            cr &= core.BURST_DRATE_BITS
+            case cr
+                0:
+                    return 876
+                1..63:
+                    return 1000 / (cr * 20)
+
+    r := ( (cr & core.BURST_DRATE_MASK) | r)
+    writereg(core.CFG1, r)
+    mag_opmode(opmode_orig)                      ' restore user op. mode
+
+
+PUB mag_data_rdy(): f
+' Flag indicating magnetometer data is ready
+'   Returns: TRUE (-1) if data ready, FALSE (0) otherwise
+    return ( pinr(_INT_PIN) == 1 )
+
+
+PUB mag_opmode(m=-2): cm
+' Set magnetometer operating mode
+'   Valid values:
+'       SINGLE (0): Single-shot measurement
+'       IDLE (0): alias for SINGLE
+'       WOC (2): Wake-On-Change
+'       CONT (4): Continuous measurement
+'   Any other value polls the chip and returns the current setting
+    cm := (readstatus() >> core.MODE) & core.MODE_BITS
+    case m
+        SINGLE:
+            if ( cm <> SINGLE )
+                command(core.EXIT_MODE)
+        WOC:
+            if ( cm <> WOC )
+                command(core.EXIT_MODE)
+                command(core.START_WAKE_ON_CHANGE, core.ALL)
+        CONT:
+            if ( cm <> CONT )
+                command(core.START_BURST_MODE, core.ALL)
+                waitms(10) 'xxx only about 2ms until first ready pulse
+        other:
+            return cm
+
+
+PUB mag_scale(s): cs | opmode_orig, adcres, axis
+' Set magnetometer full-scale range 'XXX units
+'   Valid values: TBD
+'   Any other value polls the chip and returns the current setting
+    opmode_orig := mag_opmode()                 ' store user's opmode
+    mag_opmode(IDLE)                            ' switch to idle to read/write
+    cs := readreg(core.CFG0)
+    case s
+        0..7:
+            adcres := 1 << (mag_adc_res()-16)   ' map 16..19bits to 0..3
+            repeat axis from X_AXIS to Y_AXIS
+                _mres[axis] := lookupz(s:   0_751, 0_601, 0_451, 0_376, 0_300, 0_250, 0_200, ...
+                                            0_150)
+                _mres[axis] := (_mres[axis] * SENS_XY_0C * adcres) / 1000
+
+            { Z-axis sensitivity is different from X and Y: }
+            _mres[Z_AXIS] := lookupz(s: 1_210, 0_968, 0_726, 0_605, 0_484, 0_403, 0_323, 0_242)
+            _mres[Z_AXIS] := (_mres[Z_AXIS] * SENS_Z_0C * adcres) / 1000
+            s := ( (cs & core.GAIN_SEL_MASK) | (s << core.GAIN_SEL) )
+            writereg(core.CFG0, s)
+            mag_opmode(opmode_orig)
+        other:
+            mag_opmode(opmode_orig)              ' restore user's opmode
+            return ( (cs >> core.GAIN_SEL) & core.GAIN_SEL_BITS)
+
+
+PUB measure_mag(): s
+' Perform a measurement
+'   NOTE: This method only applies to single-shot measurement mode
+'       and will stop continuous measurement mode, if called
+    return command(core.START_SINGLE_MEAS, core.ALL)
+
+
+PUB reset(): s
+' Reset the device
+'   NOTE: A mandatory 2ms delay is waited after resetting
+    exit()
+    command(core.RESET)
+    waitus(core.TPOR)
+
+
+PUB temp_comp_ena(s): cs | opmode_orig
+' Enable on-chip temperature compensation for magnetometer readings
+'   Valid values: TRUE (-1 or 1) or FALSE
+'   Any other value polls the chip and returns the current setting
+    opmode_orig := mag_opmode()                 ' store user op. mode
+    mag_opmode(IDLE)                            ' must be in idle to read regs
+    cs := readreg(core.CFG1)
+    case abs(s)
+        0, 1:
+            s := abs(s) << core.TCMP_EN
+            s := ( (cs & core.TCMP_EN_MASK) | s)
+            writereg(core.CFG1, s)
+            mag_opmode(opmode_orig)             ' restore user's opmode
+        other:
+            return ( ( (cs >> core.TCMP_EN) & 1) == 1)
+
+
+PUB temp_data(): t
+' Read temperature data
+'   Returns: Raw temperature word, s16 (sign-extended)
+    return ~~_last_temp
+
+
+PUB temp_word2deg(w): t
+' Calculate temperature, using temperature word
+'   Returns: temperature, in hundredths of a degree, in chosen scale
+    t := ( ( ( (w & $ffff) * 1_000) - 46244_000) / 45_2) + 25_00
+    case _temp_scale
+        C:
+            return
+        F:
+            return ( (t * 90) / 50) + 32_00
+        other:
+            return FALSE
+
+
+PRI command(cmd, arg=0, rdlen=0, p_dest=0): s | cmd_pkt, tmp
+' Send command with arg to device
+'   cmd:    command
+'   arg:    argument/parameter (optional)
+'   rdlen:  read length, in bytes (optional)
+'   p_dest: pointer to destination buffer to copy data to (optional)
+    s := 0
+    cmd_pkt.byte[0] := SLAVE_WR
+    cmd_pkt.byte[1] := cmd
+
+    case cmd
+        core.READ_MEAS:
+            cmd_pkt.byte[1] |= arg              ' cmd[7..4] | arg[3..0]
+            i2c.start()
+            i2c.wrblock_lsbf(@cmd_pkt, 2)
+            i2c.start()                         ' first byte read is always
+            i2c.write(SLAVE_RD)                 '   the status byte
+            _status := s := i2c.read(i2c.ACK)
+
+            ' verify the number of bytes ready to read matches what's requested
+            if ( rdlen == (2 * (s & core.D_BITS) + 2) )
+                i2c.rdblock_msbf(p_dest, rdlen, i2c.NAK)
+                i2c.stop()
+            else
+                i2c.stop()
+                return false
+        core.START_SINGLE_MEAS, core.START_BURST_MODE, core.EXIT_MODE, core.NOOP:
+            cmd_pkt.byte[1] |= arg
+            i2c.start()
+            i2c.wrblock_lsbf(@cmd_pkt, 2)
+            i2c.start()
+            i2c.write(SLAVE_RD)
+            s := i2c.read(i2c.NAK)
+            i2c.stop()
+            waitms(2)                           ' wait for measurement
+        core.RESET:
+            i2c.start()
+            i2c.wrblock_lsbf(@cmd_pkt, 2)
+            i2c.stop()
+        other:
+            return
+
+
+PRI exit(): s
+' Exit mode
+    return command(core.EXIT_MODE)
+
+
+PUB readreg(reg_nr): v | cmd_pkt, tmp
+' Read nr_bytes from device
+    v := 0
+    case reg_nr
+        core.CFG0..core.FREE_END:               ' read RAM registers
+            cmd_pkt.byte[0] := SLAVE_WR
+            cmd_pkt.byte[1] := core.READ_REG    ' RR command
+            cmd_pkt.byte[2] := reg_nr
+
+            i2c.start()
+            i2c.wrblock_lsbf(@cmd_pkt, 3)
+            i2c.start()
+            i2c.write(SLAVE_RD)
+            _status := i2c.read(i2c.ACK)        ' first byte read is always the status byte
+            i2c.rdblock_msbf(@v, 2, i2c.NAK)
+            i2c.stop
+        other:
+
+    return
+
+
+PRI readstatus(): s
+' Read status byte
+    _status := s := command(core.NOOP)
+
+
+PRI writereg(reg_nr, val) | tmp, cmd_pkt[2]
+' Write nr_bytes to device
+    case reg_nr
+        core.CFG0..core.WOT_THRESHOLD:          ' writable RAM reg locations
+            cmd_pkt.byte[0] := SLAVE_WR
+            cmd_pkt.byte[1] := core.WRITE_REG   ' WR command
+            cmd_pkt.byte[2] := val.byte[1]      ' data first...
+            cmd_pkt.byte[3] := val.byte[0]      '   ...
+            cmd_pkt.byte[4] := reg_nr           ' _now_ the register #
+
+            i2c.start()
+            i2c.wrblock_lsbf(@cmd_pkt, 5)
+            i2c.start()
+            i2c.write(SLAVE_RD)
+            _status := i2c.read(i2c.NAK)        ' update the status byte
+            i2c.stop
+        other:
+
+    return
+
+
+DAT
+{
+Copyright 2026 Jesse Burt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
+OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
+
